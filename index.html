@@ -175,6 +175,18 @@ a{color:var(--cyan)}
 #toast.good{border-color:rgba(47,226,160,.5)}
 @keyframes pop{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%)}}
 
+.contract-card{margin-top:20px;border-color:rgba(58,233,255,.32);background:linear-gradient(140deg,rgba(58,233,255,.10),rgba(91,124,255,.05))}
+.cc-main{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.cc-addr{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.cc-addr code{font-size:14.5px;color:var(--cyan);word-break:break-all;letter-spacing:.01em}
+.cc-stats{margin-left:auto;display:flex;gap:26px;text-align:right}
+.cc-stats b{display:block;font-size:24px;font-weight:800;letter-spacing:-.03em;font-family:var(--mono)}
+.cc-stats div:nth-child(1) b{color:var(--ink)}
+.cc-stats div:nth-child(2) b{color:var(--green)}
+.cc-stats div:nth-child(3) b{color:var(--amber)}
+.cc-stats span{font-size:11px;color:var(--muted);display:block;margin-top:2px}
+.cc-foot{margin-top:14px;padding-top:12px;border-top:1px solid var(--line-2);display:flex;gap:18px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+.cc-foot code{color:var(--ink-dim);font-size:11.5px}
 .banner{
   margin-top:20px;padding:14px 18px;border-radius:12px;font-size:13px;line-height:1.55;
   background:rgba(255,177,61,.1);border:1px solid rgba(255,177,61,.3);color:#ffd9a3;
@@ -220,6 +232,28 @@ a{color:var(--cyan)}
         </p>
         <button class="btn primary" id="deployBtn">⬆ Жаңа контракт deploy жасау</button>
       </div>
+    </div>
+  </div>
+
+  <div class="card contract-card" id="contractCard" hidden>
+    <div class="cc-main">
+      <div>
+        <h3 style="margin-bottom:8px">Жұмыс істеп тұрған контракт · Sepolia</h3>
+        <div class="cc-addr">
+          <code id="ccAddr">—</code>
+          <button class="btn sm" id="ccCopy" title="Адресті көшіру">⧉ Көшіру</button>
+          <a class="btn sm" id="ccScan" href="#" target="_blank" rel="noopener">Etherscan ↗</a>
+        </div>
+      </div>
+      <div class="cc-stats">
+        <div><b id="ccSpots">0</b><span>орын</span></div>
+        <div><b id="ccFree">0</b><span>бос</span></div>
+        <div><b id="ccBal">0</b><span>ETH контрактта</span></div>
+      </div>
+    </div>
+    <div class="cc-foot">
+      <span>owner: <code id="ccOwner">—</code></span>
+      <span id="ccMode">оқу режимі — кошелек қажет емес</span>
     </div>
   </div>
 
@@ -310,6 +344,16 @@ a{color:var(--cyan)}
 const $ = id => document.getElementById(id);
 const SEPOLIA = 11155111n;
 
+/* Deploy жасалған контракттың адресі.
+   Мұнда адрес тұрса, сайт кошелексіз-ақ Sepolia-дан нақты деректерді оқиды. */
+const DEFAULT_CONTRACT = "";
+
+/* Кошелексіз оқу үшін ашық RPC (view сұраулары газ талап етпейді) */
+const RPC_URLS = [
+  "https://ethereum-sepolia-rpc.publicnode.com",
+  "https://rpc.sepolia.org"
+];
+
 const ABI = [
   "function owner() view returns (address)",
   "function spotCount() view returns (uint256)",
@@ -336,6 +380,7 @@ let backend = null;
 let spots = [], zoneFilter = 'all', selected = null, hours = 1, busyTx = false;
 let me = null, isOwner = false, isOperator = false, balanceWei = 0n;
 let events = [];
+let contractAddr = null, ownerAddress = null, liveContract = null;
 
 /* ═══════════ helpers ═══════════ */
 const short = a => a ? a.slice(0, 6) + '…' + a.slice(-4) : '—';
@@ -380,7 +425,27 @@ function errText(e){
   const raw = e?.reason || e?.shortMessage || e?.info?.error?.message || e?.data?.message || e?.message || String(e);
   if (/user rejected|ACTION_REJECTED/i.test(raw)) return 'Транзакцияны пайдаланушы бас тартты';
   if (/insufficient funds/i.test(raw)) return 'Аккаунтта жеткілікті test ETH жоқ';
+  // кейбір түйіндер revert себебін қайтармайды — түсініксіз техникалық мәтін көрсетпейміз
+  if (/missing revert data|CALL_EXCEPTION|cannot estimate gas|execution reverted$/i.test(raw))
+    return 'Контракт транзакцияны қабылдамады — require() шарты бұзылған. Деректерді жаңартып, қайта көріңіз.';
   return raw.replace(/^execution reverted:?\s*/i, 'revert: ');
+}
+
+/* Транзакция жібермес бұрын контракттағы шарттарды жергілікті тексереміз.
+   Солай істегенде пайдаланушы нақты require() мәтінін көреді. */
+function preflightBook(s, h){
+  if (!s) return 'Spot not found';
+  if (s.occupied) return 'Spot already booked';
+  if (!(h > 0 && h <= 24)) return 'Hours must be 1..24';
+  return null;
+}
+function preflightRelease(s){
+  if (!s) return 'Spot not found';
+  if (!s.occupied) return 'Spot is already free';
+  const expired = s.bookedUntil > 0n && BigInt(Math.floor(Date.now() / 1000)) >= s.bookedUntil;
+  const mine = me && s.driver && s.driver.toLowerCase() === me.toLowerCase();
+  if (!mine && !(isOperator && expired)) return 'Not allowed';
+  return null;
 }
 
 /* ═══════════ DEMO backend ═══════════ */
@@ -448,37 +513,41 @@ function demoBackend(){
 }
 
 /* ═══════════ CHAIN backend ═══════════ */
-function chainBackend(contract, provider, signerAddr){
-  const send = async (fn, ...args) => {
-    const tx = await fn(...args);
+function chainBackend(readContract, writeContract, signerAddr){
+  const send = async (name, args, overrides) => {
+    if (!writeContract) throw new Error('Жазу әрекеті үшін кошелекті қосыңыз');
+    const fn = writeContract[name];
+    const tx = overrides ? await fn(...args, overrides) : await fn(...args);
     txShow('<div class="st"><span class="sp"></span>Транзакция блокқа кіруде…</div><div>' + txLink(tx.hash) + '</div>');
     const rc = await tx.wait();
     return { hash: tx.hash, receipt: rc };
   };
   return {
     kind: 'chain',
-    contract, provider,
+    readContract, writeContract,
     async load(){
-      const [raw, ownerAddr, op, bal] = await Promise.all([
-        contract.getAllSpots(), contract.owner(),
-        contract.isOperator(signerAddr), contract.contractBalance()
+      const [raw, ownerAddress, bal] = await Promise.all([
+        readContract.getAllSpots(), readContract.owner(), readContract.contractBalance()
       ]);
+      let op = false;
+      if (signerAddr){ try { op = await readContract.isOperator(signerAddr); } catch {} }
       return {
         spots: raw.map(s => ({
           id: s.id, zone: s.zone, pricePerHour: s.pricePerHour,
           occupied: s.occupied, driver: s.driver, bookedUntil: s.bookedUntil
         })),
-        me: signerAddr,
-        isOwner: ownerAddr.toLowerCase() === signerAddr.toLowerCase(),
+        me: signerAddr || null,
+        isOwner: !!signerAddr && ownerAddress.toLowerCase() === signerAddr.toLowerCase(),
         isOperator: op,
-        balance: bal
+        balance: bal,
+        ownerAddress
       };
     },
-    book: (id, h, value) => send(contract.bookSpot, id, h, { value }),
-    release: id => send(contract.releaseSpot, id),
-    addSpots: (zone, count, priceWei) => send(contract.addSpots, zone, count, priceWei),
-    setOperator: (a, ok) => send(contract.setOperator, a, ok),
-    withdraw: () => send(contract.withdraw)
+    book: (id, h, value) => send('bookSpot', [id, h], { value }),
+    release: id => send('releaseSpot', [id]),
+    addSpots: (zone, count, priceWei) => send('addSpots', [zone, count, priceWei]),
+    setOperator: (a, ok) => send('setOperator', [a, ok]),
+    withdraw: () => send('withdraw', [])
   };
 }
 const txLink = h => '<a href="https://sepolia.etherscan.io/tx/' + h + '" target="_blank" rel="noopener">' + h.slice(0, 22) + '… ↗</a>';
@@ -597,16 +666,43 @@ async function refresh(){
   try {
     const d = await backend.load();
     spots = d.spots; me = d.me; isOwner = d.isOwner; isOperator = d.isOperator; balanceWei = d.balance;
-    renderZones(); renderGrid(); renderSelection(); renderMe();
+    if (d.ownerAddress) ownerAddress = d.ownerAddress;
+    renderZones(); renderGrid(); renderSelection(); renderMe(); renderContractCard();
   } catch (e){
     toast('Деректерді оқу қатесі: ' + errText(e), 'bad');
   }
 }
 
+function renderContractCard(){
+  const show = mode === 'chain' && !!contractAddr;
+  $('contractCard').hidden = !show;
+  if (!show) return;
+  $('ccAddr').textContent = contractAddr;
+  $('ccScan').href = 'https://sepolia.etherscan.io/address/' + contractAddr;
+  $('ccOwner').textContent = ownerAddress || '—';
+  $('ccSpots').textContent = spots.length;
+  $('ccFree').textContent = spots.filter(s => !s.occupied).length;
+  $('ccBal').textContent = eth(balanceWei);
+  $('ccMode').textContent = me
+    ? (isOwner ? 'кошелек қосулы · сіз owner-сіз' : 'кошелек қосулы · жазу қолжетімді')
+    : 'оқу режимі — кошелек қажет емес';
+}
+$('ccCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(contractAddr || ''); toast('Адрес көшірілді', 'good'); }
+  catch { toast('Көшіру мүмкін болмады — адресті қолмен белгілеңіз.', 'bad'); }
+};
+
 /* ═══════════ actions ═══════════ */
 $('bookBtn').onclick = async () => {
   const s = spots.find(x => x.id === selected);
   if (!s || busyTx) return;
+  const stop = preflightBook(s, hours);
+  if (stop){
+    txShow('<div class="err">✕ revert: ' + stop + '</div>');
+    toast('Контракт қабылдамайды — <b>' + stop + '</b>', 'bad');
+    await refresh();
+    return;
+  }
   busyTx = true; renderSelection();
   const total = s.pricePerHour * BigInt(hours);
   txShow('<div class="st"><span class="sp"></span>' + (mode === 'demo' ? 'Шарттар тексерілуде…' : 'MetaMask растауын күту…') + '</div>');
@@ -630,6 +726,13 @@ $('bookBtn').onclick = async () => {
 $('releaseBtn').onclick = async () => {
   const s = spots.find(x => x.id === selected);
   if (!s || busyTx) return;
+  const stop = preflightRelease(s);
+  if (stop){
+    txShow('<div class="err">✕ revert: ' + stop + '</div>');
+    toast('Контракт қабылдамайды — <b>' + stop + '</b>', 'bad');
+    await refresh();
+    return;
+  }
   busyTx = true; renderSelection();
   txShow('<div class="st"><span class="sp"></span>Босату сұралуда…</div>');
   try {
@@ -702,13 +805,27 @@ function setMode(m){
     refresh();
   } else {
     backend = null; spots = []; me = null; isOwner = false; isOperator = false; balanceWei = 0n;
-    zoneFilter = 'all';
-    renderZones(); renderGrid(); renderSelection(); renderMe();
+    zoneFilter = 'all'; contractAddr = null;
+    renderZones(); renderGrid(); renderSelection(); renderMe(); renderContractCard();
     $('netText').textContent = 'Қосылмаған';
     $('netPill').className = 'pill warn';
-    const saved = localStorage_get('parkchain.contract');
-    if (saved) $('addrInput').value = saved;
-    toast('Sepolia режимі: кошелекті қосып, контракт адресін енгізіңіз.');
+    const saved = DEFAULT_CONTRACT || localStorage_get('parkchain.contract');
+    if (saved){
+      $('addrInput').value = saved;
+      txShow('<div class="st"><span class="sp"></span>Sepolia-дан оқылуда…</div>');
+      connectContract(saved, true).then(ok => {
+        if (ok){
+          $('netText').textContent = 'Sepolia · оқу режимі';
+          $('netPill').className = 'pill ok';
+          txShow('');
+        } else {
+          txShow('');
+          toast('Контракт адресін тексеріңіз немесе жаңасын deploy жасаңыз.');
+        }
+      });
+    } else {
+      toast('Sepolia режимі: кошелекті қосып, контракт адресін енгізіңіз немесе жаңасын deploy жасаңыз.');
+    }
   }
 }
 function localStorage_get(k){ try { return localStorage.getItem(k); } catch { return null; } }
@@ -744,30 +861,67 @@ $('connectBtn').onclick = async () => {
     $('netPill').className = 'pill ok';
     $('connectBtn').textContent = '🦊 ' + short(window._pc.addr);
     toast('Кошелек қосылды: ' + short(window._pc.addr), 'good');
-    const saved = $('addrInput').value.trim() || localStorage_get('parkchain.contract');
-    if (saved) { $('addrInput').value = saved; $('loadBtn').click(); }
+    // кошелек қосылғаннан кейін контрактты қайта байланыстырамыз — енді жазу да қолжетімді
+    const saved = $('addrInput').value.trim() || DEFAULT_CONTRACT || localStorage_get('parkchain.contract');
+    if (saved) await connectContract(saved, true);
   } catch (e){
     toast('Қосылу қатесі: ' + errText(e), 'bad');
   }
 };
 
-$('loadBtn').onclick = async () => {
-  const addr = $('addrInput').value.trim();
-  if (!window._pc){ toast('Әуелі кошелекті қосыңыз.', 'bad'); return; }
-  if (!ethers.isAddress(addr)){ toast('Контракт адресі дұрыс емес.', 'bad'); return; }
-  try {
-    const code = await window._pc.provider.getCode(addr);
-    if (code === '0x'){ toast('Бұл адресте контракт жоқ (Sepolia желісін тексеріңіз).', 'bad'); return; }
-    const contract = new ethers.Contract(addr, ABI, window._pc.signer);
-    backend = chainBackend(contract, window._pc.provider, window._pc.addr);
-    localStorage_set('parkchain.contract', addr);
-    await refresh();
-    listenEvents(contract);
-    toast('Контрактқа қосылды: ' + short(addr) + ' · ' + spots.length + ' орын', 'good');
-  } catch (e){
-    toast('Контрактқа қосылу қатесі: ' + errText(e), 'bad');
+async function getReadProvider(){
+  if (window._pc) return window._pc.provider;
+  for (const url of RPC_URLS){
+    try {
+      const p = new ethers.JsonRpcProvider(url, 11155111);
+      p.pollingInterval = 12000;
+      await p.getBlockNumber();
+      return p;
+    } catch {}
   }
-};
+  return null;
+}
+
+async function connectContract(addr, silent){
+  if (!ethers.isAddress(addr)){ if (!silent) toast('Контракт адресі дұрыс емес.', 'bad'); return false; }
+  const readProvider = await getReadProvider();
+  if (!readProvider){ if (!silent) toast('Sepolia желісіне қосылу мүмкін болмады.', 'bad'); return false; }
+  try {
+    const code = await readProvider.getCode(addr);
+    if (code === '0x'){ if (!silent) toast('Бұл адресте контракт жоқ (Sepolia желісін тексеріңіз).', 'bad'); return false; }
+
+    const readContract = new ethers.Contract(addr, ABI, readProvider);
+
+    // шынымен ParkingManager екенін тексеру — басқа контракт болса, жалған "қосылды" шықпасын
+    try {
+      await readContract.owner();
+      await readContract.spotCount();
+    } catch {
+      if (!silent) toast('Бұл адрестегі контракт — ParkingManager емес.<br>Адресті тексеріңіз немесе жаңасын deploy жасаңыз.', 'bad');
+      return false;
+    }
+
+    if (liveContract){ try { liveContract.removeAllListeners(); } catch {} }
+    const writeContract = window._pc ? new ethers.Contract(addr, ABI, window._pc.signer) : null;
+
+    backend = chainBackend(readContract, writeContract, window._pc?.addr || null);
+    liveContract = readContract;
+    contractAddr = addr;
+    localStorage_set('parkchain.contract', addr);
+    $('addrInput').value = addr;
+
+    await refresh();
+    listenEvents(readContract);
+    toast('Контрактқа қосылды: ' + short(addr) + ' · ' + spots.length + ' орын'
+      + (window._pc ? '' : ' · <b>оқу режимі</b>'), 'good');
+    return true;
+  } catch (e){
+    if (!silent) toast('Контрактқа қосылу қатесі: ' + errText(e), 'bad');
+    return false;
+  }
+}
+
+$('loadBtn').onclick = () => connectContract($('addrInput').value.trim(), false);
 $('deployBtn').onclick = async () => {
   if (!window._pc){ toast('Әуелі <b>Connect Wallet</b> басып, кошелекті қосыңыз.', 'bad'); return; }
   if (busyTx) return;
@@ -788,7 +942,7 @@ $('deployBtn').onclick = async () => {
     txShow('<div class="st ok">✓ Контракт deploy жасалды</div><div class="hash">' + addr + '</div><div>' + txLink(dtx.hash) + '</div>');
     toast('✓ Контракт дайын: ' + short(addr) + '<br>Енді owner панелінен <b>«24 орын (A·B·C)»</b> батырмасын басыңыз.', 'good');
     pushEvent('', 'Deployed', addr);
-    $('loadBtn').click();
+    await connectContract(addr, true);
   } catch (e){
     const msg = errText(e);
     txShow('<div class="err">✕ ' + msg + '</div>');
