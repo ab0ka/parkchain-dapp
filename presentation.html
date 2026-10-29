@@ -1,0 +1,1396 @@
+<!doctype html>
+<html lang="kk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ParkChain — Тұрақ орындарын басқару dApp</title>
+<meta name="description" content="№5 зертханалық жұмыс. ParkChain — тұрақ орындарының күйін блокчейнде басқаратын dApp жобасының жоспары: архитектура, смарт-контракт құрылымы, функциялар және интерфейс макеті.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --bg:#05070f; --bg-2:#0a0f1d; --panel:#0e1526;
+  --ink:#eef3ff; --ink-dim:#c3cde4; --muted:#8694b4;
+  --cyan:#3ae9ff; --blue:#5b7cff; --violet:#9d7bff;
+  --amber:#ffb13d; --green:#2fe2a0; --red:#ff5f72;
+  --line:rgba(255,255,255,.10); --line-2:rgba(255,255,255,.055);
+  --glass:rgba(255,255,255,.04);
+  --mono:'JetBrains Mono',ui-monospace,Consolas,monospace;
+  --scale:1;
+  --ease:cubic-bezier(.2,.85,.25,1);
+}
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%}
+body{
+  font-family:Inter,'Segoe UI',system-ui,-apple-system,'Noto Sans',Arial,sans-serif;
+  background:#03050b;color:var(--ink);overflow:hidden;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,h4,p,figure,ul{margin:0}
+ul{padding:0;list-style:none}
+button{font:inherit;color:inherit;cursor:pointer;background:none;border:0}
+a{color:var(--cyan)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ============ CHROME ============ */
+.topbar{
+  position:relative;z-index:30;height:56px;display:flex;align-items:center;justify-content:space-between;
+  padding:0 26px;background:rgba(8,12,22,.92);border-bottom:1px solid var(--line-2);backdrop-filter:blur(14px);
+}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;letter-spacing:-.02em;font-size:17px}
+.brand .logo{
+  width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-size:16px;font-weight:900;
+  background:linear-gradient(145deg,var(--cyan),var(--blue));color:#04121c;
+  box-shadow:0 0 22px rgba(58,233,255,.45);
+}
+.brand small{font-weight:500;color:var(--muted);font-size:13px;letter-spacing:0}
+.top-right{display:flex;align-items:center;gap:16px;font-size:12.5px;color:var(--muted);letter-spacing:.06em;text-transform:uppercase}
+.chapter{padding:5px 12px;border:1px solid var(--line);border-radius:999px;color:var(--ink-dim)}
+
+#stage{position:absolute;inset:56px 0 68px;overflow:hidden}
+#canvas{
+  position:absolute;left:50%;top:50%;width:1600px;height:900px;
+  transform:translate(-50%,-50%) scale(var(--scale));transform-origin:center;
+  background:radial-gradient(130% 110% at 10% -10%,#111b33 0%,var(--bg-2) 42%,var(--bg) 100%);
+  border-radius:18px;overflow:hidden;
+  box-shadow:0 40px 120px rgba(0,0,0,.75),0 0 0 1px rgba(255,255,255,.06);
+}
+
+/* ============ ANIMATED BACKDROP ============ */
+.bg{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.bg .blob{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5;mix-blend-mode:screen}
+.bg .b1{width:620px;height:620px;left:-170px;top:-200px;background:radial-gradient(circle,rgba(91,124,255,.75),transparent 68%);animation:drift1 26s ease-in-out infinite}
+.bg .b2{width:560px;height:560px;right:-150px;top:-120px;background:radial-gradient(circle,rgba(58,233,255,.55),transparent 68%);animation:drift2 32s ease-in-out infinite}
+.bg .b3{width:700px;height:700px;right:5%;bottom:-340px;background:radial-gradient(circle,rgba(157,123,255,.45),transparent 70%);animation:drift3 38s ease-in-out infinite}
+@keyframes drift1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(90px,70px) scale(1.14)}}
+@keyframes drift2{0%,100%{transform:translate(0,0) scale(1.05)}50%{transform:translate(-80px,100px) scale(.92)}}
+@keyframes drift3{0%,100%{transform:translate(0,0)}50%{transform:translate(-120px,-70px) scale(1.1)}}
+.bg .mesh{
+  position:absolute;inset:-2px;opacity:.3;
+  background-image:linear-gradient(rgba(255,255,255,.055) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.055) 1px,transparent 1px);
+  background-size:58px 58px;
+  mask-image:radial-gradient(120% 90% at 50% 0%,#000 25%,transparent 78%);
+  animation:mesh 24s linear infinite;
+}
+@keyframes mesh{to{background-position:58px 58px}}
+.bg .sweep{
+  position:absolute;top:0;bottom:0;width:38%;
+  background:linear-gradient(90deg,transparent,rgba(58,233,255,.07),transparent);
+  animation:sweep 11s ease-in-out infinite;
+}
+@keyframes sweep{0%{left:-40%}55%{left:100%}100%{left:100%}}
+.bg .vig{position:absolute;inset:0;background:radial-gradient(120% 100% at 50% 50%,transparent 52%,rgba(2,4,10,.75) 100%)}
+
+/* progress */
+.progress{position:absolute;left:0;right:0;top:0;height:3px;background:rgba(255,255,255,.07);z-index:12}
+.progress i{display:block;height:100%;width:12.5%;border-radius:0 3px 3px 0;background:linear-gradient(90deg,var(--blue),var(--cyan));box-shadow:0 0 16px rgba(58,233,255,.8);transition:width .55s var(--ease)}
+
+/* ============ SLIDES ============ */
+.slide{
+  position:absolute;inset:0;width:1600px;height:900px;padding:58px 72px 54px;
+  display:flex;flex-direction:column;
+  opacity:0;visibility:hidden;pointer-events:none;
+  transform:scale(.985) translateY(16px);
+  transition:opacity .4s ease,transform .6s var(--ease),visibility .4s;
+}
+.slide.active{opacity:1;visibility:visible;pointer-events:auto;transform:none;z-index:5}
+
+.eyebrow{
+  display:inline-flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--cyan);margin-bottom:14px;
+}
+.eyebrow::before{content:"";width:26px;height:2px;border-radius:2px;background:linear-gradient(90deg,var(--cyan),transparent)}
+.slide h2{font-size:48px;font-weight:800;letter-spacing:-.035em;line-height:1.08;max-width:1180px}
+.slide h2 em{font-style:normal;background:linear-gradient(100deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+.lead{margin-top:14px;font-size:19px;line-height:1.5;color:var(--ink-dim);max-width:900px}
+.slide > header{flex:0 0 auto}
+.body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;justify-content:center}
+
+.foot{
+  flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;gap:20px;
+  margin-top:20px;padding-top:16px;border-top:1px solid var(--line-2);
+  font-size:13px;color:var(--muted);letter-spacing:.02em;
+}
+.foot .num{font-family:var(--mono);color:var(--ink-dim);letter-spacing:.1em}
+
+/* ============ REVEAL ANIMATIONS ============ */
+@keyframes rise{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+@keyframes slideL{from{opacity:0;transform:translateX(-34px)}to{opacity:1;transform:none}}
+@keyframes slideR{from{opacity:0;transform:translateX(34px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{opacity:0;transform:scale(.88)}60%{transform:scale(1.03)}100%{opacity:1;transform:scale(1)}}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+.slide.anim [data-a]{animation-duration:.75s;animation-timing-function:var(--ease);animation-fill-mode:both}
+.slide.anim [data-a="rise"]{animation-name:rise}
+.slide.anim [data-a="left"]{animation-name:slideL}
+.slide.anim [data-a="right"]{animation-name:slideR}
+.slide.anim [data-a="pop"]{animation-name:pop}
+.slide:not(.anim) [data-a]{opacity:1}
+
+/* ============ GENERIC PARTS ============ */
+.card{
+  position:relative;background:linear-gradient(160deg,rgba(255,255,255,.065),rgba(255,255,255,.02));
+  border:1px solid var(--line);border-radius:16px;padding:22px 24px;overflow:hidden;
+  transition:transform .4s var(--ease),border-color .4s,box-shadow .4s;
+}
+.card::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;opacity:0;transition:opacity .4s;
+  background:radial-gradient(90% 120% at 0% 0%,rgba(58,233,255,.16),transparent 60%);
+}
+.card:hover{transform:translateY(-6px);border-color:rgba(58,233,255,.4);box-shadow:0 20px 44px rgba(0,0,0,.45)}
+.card:hover::after{opacity:1}
+.chip{
+  display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:999px;
+  border:1px solid var(--line);background:var(--glass);font-size:13.5px;font-weight:600;color:var(--ink-dim);
+}
+.chip b{font-family:var(--mono);font-size:12px;color:var(--cyan);font-weight:500}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 0 rgba(47,226,160,.6);animation:ping 2s infinite}
+@keyframes ping{70%{box-shadow:0 0 0 9px rgba(47,226,160,0)}100%{box-shadow:0 0 0 0 rgba(47,226,160,0)}}
+code,.mono{font-family:var(--mono)}
+.tag{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:4px 9px;border-radius:6px}
+.tag.write{background:rgba(255,177,61,.14);color:var(--amber);border:1px solid rgba(255,177,61,.3)}
+.tag.read{background:rgba(58,233,255,.12);color:var(--cyan);border:1px solid rgba(58,233,255,.3)}
+.tag.own{background:rgba(157,123,255,.14);color:var(--violet);border:1px solid rgba(157,123,255,.3)}
+
+/* ============ SLIDE 1 — COVER ============ */
+.cover{padding:52px 72px 50px}
+.cover .body{display:grid;grid-template-columns:1fr 700px;gap:52px;align-items:center}
+.cover h1{
+  font-size:118px;font-weight:900;letter-spacing:-.055em;line-height:.92;margin:4px 0 6px;
+  background:linear-gradient(96deg,#ffffff 8%,var(--cyan) 46%,var(--violet) 92%);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  filter:drop-shadow(0 12px 40px rgba(58,233,255,.22));
+}
+.cover .sub{font-size:33px;font-weight:700;letter-spacing:-.025em;color:var(--ink);line-height:1.16}
+.cover .lead{font-size:18.5px;max-width:620px;margin-top:18px}
+.cover .chips{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.team{margin-top:34px;display:grid;grid-template-columns:repeat(2,1fr);gap:16px;max-width:620px}
+.member{
+  padding:16px 16px 15px;border-radius:14px;border:1px solid var(--line);background:var(--glass);
+  border-top:2px solid var(--cyan);transition:transform .35s var(--ease),background .35s;
+}
+.member:nth-child(2){border-top-color:var(--violet)}
+.member:nth-child(3){border-top-color:var(--amber)}
+.member:hover{transform:translateY(-5px);background:rgba(255,255,255,.075)}
+.member .name{font-size:17px;font-weight:700;letter-spacing:-.015em;outline:none;border-radius:5px;padding:1px 3px;margin:-1px -3px}
+.member .name:focus{background:rgba(58,233,255,.14);box-shadow:0 0 0 1px rgba(58,233,255,.5)}
+.member p{margin-top:5px;font-size:13px;line-height:1.42;color:var(--muted)}
+
+/* parking lot visual */
+.lot-wrap{position:relative}
+.lot{
+  position:relative;border-radius:20px;padding:26px 26px 0;overflow:hidden;
+  background:linear-gradient(170deg,rgba(18,26,46,.95),rgba(8,12,24,.95));
+  border:1px solid var(--line);box-shadow:inset 0 1px 0 rgba(255,255,255,.07),0 30px 70px rgba(0,0,0,.5);
+}
+.lot-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.lot-head .t{font-size:13px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+.lot-head .legend{display:flex;gap:14px;font-size:12px;color:var(--muted)}
+.lot-head .legend i{display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;vertical-align:middle}
+.lot-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:11px}
+.pslot{
+  position:relative;height:104px;border-radius:9px;display:grid;place-items:center;
+  border:2px dashed rgba(58,233,255,.35);background:rgba(58,233,255,.05);
+  transition:background .5s,border-color .5s;
+}
+.pslot .pmark{font-size:22px;font-weight:900;color:rgba(58,233,255,.75);letter-spacing:-.04em}
+.pslot.taken{border-style:solid;border-color:rgba(255,177,61,.42);background:rgba(255,177,61,.07)}
+.pslot .code{position:absolute;bottom:4px;left:7px;font-family:var(--mono);font-size:9.5px;color:rgba(255,255,255,.35)}
+.car{
+  position:relative;width:46px;height:78px;border-radius:13px 13px 11px 11px;
+  background:linear-gradient(180deg,#6f82ff,#2b38a8);
+  box-shadow:0 10px 22px rgba(0,0,0,.5),inset 0 2px 0 rgba(255,255,255,.3);
+}
+.car::before{content:"";position:absolute;left:6px;right:6px;top:13px;height:19px;border-radius:7px;background:linear-gradient(180deg,rgba(226,242,255,.9),rgba(170,200,235,.6))}
+.car::after{content:"";position:absolute;left:7px;right:7px;bottom:13px;height:15px;border-radius:6px;background:rgba(200,225,250,.42)}
+.car.c2{background:linear-gradient(180deg,#ff9f6b,#c84a24)}
+.car.c3{background:linear-gradient(180deg,#8ff0d4,#1e9c78)}
+.car.c4{background:linear-gradient(180deg,#e7ecf8,#9aa6c4)}
+.car.c5{background:linear-gradient(180deg,#b79cff,#6336c9)}
+.pslot.cycle{animation:slotCycle 9s ease-in-out infinite}
+.pslot.cycle .car{animation:parkIn 9s ease-in-out infinite}
+@keyframes slotCycle{
+  0%,24%{border-style:dashed;border-color:rgba(58,233,255,.35);background:rgba(58,233,255,.05)}
+  34%,74%{border-style:solid;border-color:rgba(255,177,61,.5);background:rgba(255,177,61,.1)}
+  86%,100%{border-style:dashed;border-color:rgba(58,233,255,.35);background:rgba(58,233,255,.05)}
+}
+@keyframes parkIn{
+  0%,20%{opacity:0;transform:translateY(-120px) scale(.9)}
+  34%,72%{opacity:1;transform:translateY(0) scale(1)}
+  88%,100%{opacity:0;transform:translateY(-120px) scale(.9)}
+}
+.pslot.cycle .pmark{animation:markFade 9s ease-in-out infinite;position:absolute}
+@keyframes markFade{0%,22%{opacity:.75}30%,80%{opacity:0}92%,100%{opacity:.75}}
+.lane{position:relative;height:92px;margin:14px -26px 0;overflow:hidden;border-top:1px solid var(--line-2)}
+.lane::before{
+  content:"";position:absolute;left:0;right:0;top:45px;height:3px;
+  background:repeating-linear-gradient(90deg,rgba(255,255,255,.22) 0 26px,transparent 26px 52px);
+}
+.drive{position:absolute;top:18px;left:-120px;animation:drive 7s linear infinite}
+.drive .car{transform:rotate(-90deg)}
+.drive.d2{top:14px;animation-duration:9.5s;animation-delay:2.6s}
+.drive.d3{top:20px;animation-duration:8.2s;animation-delay:5s}
+@keyframes drive{to{left:760px}}
+.visual-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:0;background:var(--line-2);border-radius:0 0 20px 20px;overflow:hidden;border:1px solid var(--line);border-top:0}
+.visual-stats div{padding:16px 20px;background:rgba(10,15,28,.9)}
+.visual-stats b{display:block;font-size:30px;font-weight:800;letter-spacing:-.04em;color:var(--cyan)}
+.visual-stats span{font-size:12px;line-height:1.35;color:var(--muted);display:block;margin-top:3px}
+
+/* ============ SLIDE 2 — PROBLEM ============ */
+.problem-grid{display:grid;grid-template-columns:.86fr 1.14fr;gap:62px;align-items:start}
+.statement{font-size:44px;font-weight:800;letter-spacing:-.04em;line-height:1.22}
+.statement span{display:block}
+.statement .hi{background:linear-gradient(100deg,var(--cyan),var(--violet));-webkit-background-clip:text;background-clip:text;color:transparent}
+.scope{margin-top:20px;font-size:17px;line-height:1.55;color:var(--muted);max-width:430px}
+.metrics{display:grid;gap:12px;margin-top:28px}
+.metric{display:flex;align-items:baseline;gap:14px;padding:13px 16px;border-radius:12px;background:var(--glass);border:1px solid var(--line-2)}
+.metric b{font-family:var(--mono);font-size:26px;font-weight:700;color:var(--amber);min-width:42px}
+.metric span{font-size:14px;color:var(--ink-dim);line-height:1.35}
+.problems{display:grid;gap:14px}
+.problem{display:grid;grid-template-columns:62px 1fr;gap:18px;align-items:start;padding:20px 22px;border-radius:15px;border:1px solid var(--line-2);background:linear-gradient(140deg,rgba(255,255,255,.05),rgba(255,255,255,.015));transition:border-color .35s,transform .35s var(--ease)}
+.problem:hover{transform:translateX(7px);border-color:rgba(255,95,114,.42)}
+.problem .n{font-family:var(--mono);font-size:30px;font-weight:700;color:var(--red);opacity:.85;line-height:1}
+.problem h3{font-size:21px;font-weight:700;letter-spacing:-.02em}
+.problem p{margin-top:6px;font-size:14.5px;line-height:1.5;color:var(--muted)}
+.goal{
+  margin-top:20px;padding:20px 24px;border-radius:14px;display:flex;gap:16px;align-items:flex-start;
+  background:linear-gradient(100deg,rgba(47,226,160,.14),rgba(58,233,255,.06));border:1px solid rgba(47,226,160,.32);
+}
+.goal b{color:var(--green);font-size:15px;letter-spacing:.04em;text-transform:uppercase;white-space:nowrap;padding-top:2px}
+.goal p{font-size:16px;line-height:1.5;color:var(--ink-dim)}
+
+/* ============ SLIDE 3 — USERS ============ */
+.roles{display:grid;grid-template-columns:repeat(4,1fr);gap:18px}
+.role{padding:24px 22px 22px;border-radius:16px;border:1px solid var(--line);background:linear-gradient(165deg,rgba(255,255,255,.06),rgba(255,255,255,.015));position:relative;overflow:hidden;transition:transform .4s var(--ease),box-shadow .4s}
+.role::before{content:"";position:absolute;left:0;right:0;top:0;height:3px;background:var(--c,var(--cyan));box-shadow:0 0 20px var(--c,var(--cyan))}
+.role:nth-child(1){--c:var(--violet)}.role:nth-child(2){--c:var(--cyan)}.role:nth-child(3){--c:var(--amber)}.role:nth-child(4){--c:var(--green)}
+.role:hover{transform:translateY(-9px) scale(1.015);box-shadow:0 26px 50px rgba(0,0,0,.5)}
+.role .ico{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-size:23px;background:color-mix(in srgb,var(--c) 18%,transparent);border:1px solid color-mix(in srgb,var(--c) 38%,transparent);margin-bottom:16px}
+.role h3{font-size:22px;font-weight:800;letter-spacing:-.025em}
+.role .en{font-family:var(--mono);font-size:12px;color:var(--c);letter-spacing:.06em;margin-top:3px}
+.role p{margin-top:12px;font-size:14px;line-height:1.5;color:var(--muted)}
+.role .perm{margin-top:14px;display:inline-block;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:6px;background:color-mix(in srgb,var(--c) 14%,transparent);color:var(--c);border:1px solid color-mix(in srgb,var(--c) 30%,transparent)}
+.actions{margin-top:26px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.action{display:flex;gap:16px;align-items:center;padding:18px 20px;border-radius:14px;border:1px solid var(--line-2);background:var(--glass);position:relative}
+.action:not(:last-child)::after{content:"→";position:absolute;right:-19px;top:50%;transform:translateY(-50%);color:var(--cyan);font-size:20px;animation:nudge 1.8s ease-in-out infinite}
+@keyframes nudge{0%,100%{transform:translateY(-50%) translateX(0);opacity:.55}50%{transform:translateY(-50%) translateX(5px);opacity:1}}
+.action .step{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted)}
+.action h4{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--ink);margin-top:3px}
+.action p{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.4}
+
+/* ============ SLIDE 4 — ARCHITECTURE ============ */
+.mode-tabs{display:flex;gap:9px;margin:4px 0 26px}
+.mode-tabs button{
+  padding:10px 20px;border-radius:999px;border:1px solid var(--line);font-size:14px;font-weight:600;
+  color:var(--muted);transition:all .3s;
+}
+.mode-tabs button[aria-pressed="true"]{background:linear-gradient(100deg,rgba(58,233,255,.2),rgba(91,124,255,.14));border-color:rgba(58,233,255,.55);color:var(--ink);box-shadow:0 0 24px rgba(58,233,255,.22)}
+.flow{display:grid;grid-template-columns:1fr 46px 1fr 46px 1fr 46px 1fr 46px 1fr;gap:0;align-items:stretch;position:relative}
+.node{
+  position:relative;z-index:2;padding:22px 20px;border-radius:16px;border:1px solid var(--line);
+  background:linear-gradient(165deg,rgba(16,24,44,.96),rgba(10,15,28,.96));
+  transition:all .45s var(--ease);
+}
+.node .badge{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;color:var(--cyan);text-transform:uppercase}
+.node h3{font-size:20px;font-weight:800;letter-spacing:-.025em;margin-top:9px}
+.node p{font-size:13px;line-height:1.48;color:var(--muted);margin-top:9px}
+.node .ico{font-size:26px;margin-bottom:4px;display:block}
+.wire{position:relative;z-index:1;align-self:center;height:3px;margin:0 -6px;background:linear-gradient(90deg,rgba(255,255,255,.14),rgba(255,255,255,.14));border-radius:3px}
+.wire i{
+  position:absolute;top:50%;width:9px;height:9px;border-radius:50%;margin-top:-4.5px;
+  background:var(--amber);box-shadow:0 0 14px 3px rgba(255,177,61,.75);
+  animation:travelF 2.2s linear infinite;
+}
+.wire i:nth-child(2){animation-delay:.73s}.wire i:nth-child(3){animation-delay:1.46s}
+@keyframes travelF{from{left:-4px}to{left:calc(100% - 4px)}}
+@keyframes travelB{from{left:calc(100% - 4px)}to{left:-4px}}
+.flow.read .wire i{background:var(--cyan);box-shadow:0 0 14px 3px rgba(58,233,255,.75);animation-name:travelB}
+.flow.read .node.sign{opacity:.42;border-style:dashed;filter:grayscale(.55)}
+.flow.read .node.sign .skip{opacity:1;transform:translateY(0)}
+.node .skip{
+  position:absolute;left:50%;bottom:-13px;transform:translate(-50%,8px);opacity:0;transition:all .4s var(--ease);
+  font-family:var(--mono);font-size:10px;letter-spacing:.07em;white-space:nowrap;
+  padding:4px 10px;border-radius:999px;background:rgba(58,233,255,.16);border:1px solid rgba(58,233,255,.4);color:var(--cyan);
+}
+.bypass{position:absolute;left:8%;right:8%;top:-34px;height:64px;z-index:0;opacity:0;transition:opacity .45s}
+.flow.read .bypass{opacity:1}
+.bypass svg{width:100%;height:100%;overflow:visible}
+.bypass path{fill:none;stroke:rgba(58,233,255,.55);stroke-width:2;stroke-dasharray:7 7;animation:dash 1.1s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-28}}
+.flow-note{margin-top:28px;display:grid;grid-template-columns:1.25fr 1fr;gap:20px}
+.note-box{padding:20px 22px;border-radius:14px;border:1px solid var(--line-2);background:var(--glass)}
+.note-box h4{font-size:15px;font-weight:700;color:var(--cyan);letter-spacing:.02em}
+.note-box p{font-size:14px;line-height:1.52;color:var(--ink-dim);margin-top:8px}
+.note-box p code{color:var(--amber);font-size:13px}
+#modeLine{font-size:14.5px;line-height:1.5;color:var(--ink-dim)}
+
+/* ============ SLIDE 5 — DATA ============ */
+.data-grid{display:grid;grid-template-columns:1.02fr 1.18fr;gap:44px;align-items:start}
+.struct{border-radius:15px;border:1px solid var(--line);background:linear-gradient(165deg,rgba(255,255,255,.055),rgba(255,255,255,.015));overflow:hidden}
+.struct + .struct{margin-top:18px}
+.struct-head{display:flex;align-items:center;justify-content:space-between;padding:15px 20px;border-bottom:1px solid var(--line-2);background:rgba(58,233,255,.06)}
+.struct-head h3{font-family:var(--mono);font-size:18px;font-weight:700;color:var(--cyan)}
+.struct-head span{font-size:12.5px;color:var(--muted)}
+.struct:nth-of-type(2) .struct-head{background:rgba(157,123,255,.07)}
+.struct:nth-of-type(2) .struct-head h3{color:var(--violet)}
+.fields{padding:6px 20px 14px}
+.field{display:flex;align-items:baseline;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px dashed var(--line-2)}
+.field:last-child{border-bottom:0}
+.field code{font-size:13.5px;color:var(--ink);white-space:nowrap}
+.field code em{font-style:normal;color:var(--amber)}
+.field span{font-size:12.5px;color:var(--muted);text-align:right}
+.map-strip{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-top:22px}
+.mapc{padding:13px 15px;border-radius:12px;border:1px solid var(--line-2);background:var(--glass);border-top:2px solid rgba(58,233,255,.45);transition:transform .35s var(--ease),border-color .35s}
+.mapc:hover{transform:translateY(-4px);border-color:rgba(58,233,255,.5)}
+.mapc code{display:block;font-size:13px;color:var(--cyan);margin-bottom:5px}
+.mapc span{font-size:12px;line-height:1.4;color:var(--muted)}
+.code-panel{border-radius:16px;overflow:hidden;border:1px solid var(--line);background:rgba(4,7,14,.92);box-shadow:0 26px 60px rgba(0,0,0,.5)}
+.code-bar{display:flex;align-items:center;gap:9px;padding:12px 18px;background:rgba(255,255,255,.045);border-bottom:1px solid var(--line-2)}
+.code-bar .dots{display:flex;gap:6px}
+.code-bar .dots i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.2)}
+.code-bar .dots i:first-child{background:#ff5f56}.code-bar .dots i:nth-child(2){background:#ffbd2e}.code-bar .dots i:nth-child(3){background:#27c93f}
+.code-bar .name{font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-left:4px}
+.code-bar .ver{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--cyan)}
+pre{margin:0;padding:16px 20px;font-family:var(--mono);font-size:12.7px;line-height:1.52;color:#d7e2f7;overflow:hidden;min-height:300px;white-space:pre-wrap}
+pre .kw{color:#ff8fb0}pre .ty{color:#7fd6ff}pre .nm{color:#ffd48a}pre .cm{color:#5d6b86;font-style:italic}pre .st{color:#9ae6b4}
+.caret{display:inline-block;width:9px;height:17px;background:var(--cyan);vertical-align:-3px;animation:blink .9s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.model-note{margin-top:16px;font-size:13.5px;color:var(--muted);line-height:1.5;display:flex;gap:10px}
+.model-note::before{content:"◆";color:var(--cyan)}
+
+/* ============ SLIDE 6 — FUNCTIONS ============ */
+.rules-grid{display:grid;grid-template-columns:.92fr 1.08fr;gap:46px;align-items:start}
+.fn{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:13px 0;border-bottom:1px solid var(--line-2)}
+.fn:last-child{border-bottom:0}
+.fn h3{font-family:var(--mono);font-size:16px;font-weight:700;color:var(--ink)}
+.fn p{font-size:13px;color:var(--muted);margin-top:4px;line-height:1.4}
+.fn .tags{display:flex;gap:6px}
+.sim{border-radius:16px;border:1px solid var(--line);background:linear-gradient(165deg,rgba(16,24,44,.96),rgba(8,12,24,.96));padding:20px 22px;box-shadow:0 26px 60px rgba(0,0,0,.45)}
+.sim-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}
+.sim-head h3{font-size:16px;font-weight:700;letter-spacing:-.01em}
+.sim-head .hint{font-family:var(--mono);font-size:11px;color:var(--muted)}
+.cases{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:18px}
+.cases button{padding:9px 15px;border-radius:9px;border:1px solid var(--line);font-size:13px;font-weight:600;color:var(--muted);transition:all .3s}
+.cases button[aria-pressed="true"]{background:rgba(58,233,255,.16);border-color:rgba(58,233,255,.5);color:var(--ink)}
+.checks{display:grid;gap:9px}
+.check{
+  display:grid;grid-template-columns:30px 1fr auto;gap:13px;align-items:center;
+  padding:12px 15px;border-radius:11px;border:1px solid var(--line-2);background:rgba(255,255,255,.025);
+  opacity:.45;transform:translateX(-8px);transition:all .4s var(--ease);
+}
+.check.on{opacity:1;transform:none}
+.check .st{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;border:1px solid var(--line);color:var(--muted)}
+.check code{font-size:12.6px;color:var(--ink-dim);line-height:1.4}
+.check .lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted)}
+.check.pass{border-color:rgba(47,226,160,.42);background:rgba(47,226,160,.08)}
+.check.pass .st{background:var(--green);border-color:var(--green);color:#042e1f}
+.check.fail{border-color:rgba(255,95,114,.5);background:rgba(255,95,114,.1);animation:shake .45s ease}
+.check.fail .st{background:var(--red);border-color:var(--red);color:#2b0007}
+@keyframes shake{0%,100%{transform:translateX(0)}22%{transform:translateX(-9px)}48%{transform:translateX(7px)}74%{transform:translateX(-4px)}}
+.verdict{margin-top:16px;padding:15px 18px;border-radius:12px;font-size:14.5px;line-height:1.48;border:1px solid var(--line);background:rgba(255,255,255,.03);color:var(--muted);transition:all .4s}
+.verdict.ok{border-color:rgba(47,226,160,.45);background:rgba(47,226,160,.1);color:#b8f5dc}
+.verdict.bad{border-color:rgba(255,95,114,.45);background:rgba(255,95,114,.1);color:#ffc5cc}
+.verdict b{display:block;font-family:var(--mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;margin-bottom:5px}
+.rules-foot{margin-top:22px;display:grid;grid-template-columns:1fr 1fr;gap:18px}
+.rules-foot div{padding:15px 18px;border-radius:12px;background:var(--glass);border:1px solid var(--line-2);font-size:13.2px;line-height:1.5;color:var(--muted)}
+.rules-foot strong{color:var(--ink);display:block;margin-bottom:4px;font-size:13.5px}
+
+/* ============ SLIDE 7 — MOCKUP ============ */
+.ui-grid{display:grid;grid-template-columns:1fr 330px;gap:28px;align-items:start}
+.app{
+  border-radius:18px;overflow:hidden;border:1px solid var(--line);
+  background:linear-gradient(170deg,#0c1324,#070b16);box-shadow:0 30px 70px rgba(0,0,0,.55);
+}
+.app-bar{display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid var(--line-2);background:rgba(255,255,255,.035)}
+.app-bar .logo{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-weight:900;font-size:15px;background:linear-gradient(145deg,var(--cyan),var(--blue));color:#04121c}
+.app-bar .nm{font-weight:800;letter-spacing:-.02em;font-size:16px}
+.app-bar .net{font-family:var(--mono);font-size:11px;color:var(--muted);padding:4px 9px;border-radius:6px;border:1px solid var(--line)}
+.btn{
+  display:inline-flex;align-items:center;gap:8px;padding:9px 17px;border-radius:10px;font-size:13.5px;font-weight:700;
+  border:1px solid var(--line);color:var(--ink-dim);transition:all .3s;
+}
+.btn:hover{border-color:rgba(58,233,255,.5);color:var(--ink)}
+.btn.primary{background:linear-gradient(100deg,var(--cyan),var(--blue));color:#04121c;border-color:transparent;box-shadow:0 10px 26px rgba(58,233,255,.3)}
+.btn.primary:hover{transform:translateY(-2px);box-shadow:0 14px 32px rgba(58,233,255,.42)}
+.btn.primary:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.btn.wallet{margin-left:auto}
+.btn.wallet.off{position:relative}
+.btn.wallet.off::after{content:"";position:absolute;inset:-3px;border-radius:13px;border:1px solid rgba(58,233,255,.5);animation:pulseRing 2.2s ease-out infinite}
+@keyframes pulseRing{0%{opacity:.8;transform:scale(1)}100%{opacity:0;transform:scale(1.14)}}
+.app-filters{display:flex;align-items:center;gap:9px;padding:14px 20px 12px}
+.app-filters button{padding:7px 14px;border-radius:999px;border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--muted);transition:all .25s}
+.app-filters button[aria-pressed="true"]{background:rgba(58,233,255,.16);border-color:rgba(58,233,255,.5);color:var(--ink)}
+.app-filters .free-count{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--green)}
+.app-body{display:grid;grid-template-columns:1fr 252px;gap:18px;padding:4px 20px 20px}
+.spot-grid{display:grid;grid-template-columns:repeat(8,1fr);gap:8px;align-content:start}
+.spot{
+  position:relative;aspect-ratio:1/1.26;border-radius:9px;
+  display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;padding-top:6px;
+  border:1.5px dashed rgba(58,233,255,.4);background:rgba(58,233,255,.055);
+  font-family:var(--mono);font-size:11px;color:rgba(58,233,255,.85);font-weight:500;
+  transition:all .28s var(--ease);
+}
+.spot:hover:not(.busy){transform:translateY(-4px) scale(1.06);background:rgba(58,233,255,.16);box-shadow:0 10px 20px rgba(0,0,0,.4)}
+.spot.busy{border-style:solid;border-color:rgba(255,177,61,.4);background:rgba(255,177,61,.1);color:rgba(255,177,61,.85);cursor:not-allowed}
+.spot.busy::after{
+  content:"";width:17px;height:27px;border-radius:6px 6px 5px 5px;
+  background:linear-gradient(180deg,rgba(255,206,134,.95),rgba(182,104,36,.95));
+  box-shadow:inset 0 6px 0 rgba(255,255,255,.3),0 3px 7px rgba(0,0,0,.4);
+}
+.spot.sel{border-style:solid;border-color:var(--cyan);background:rgba(58,233,255,.25);color:#fff;box-shadow:0 0 0 2px rgba(58,233,255,.3),0 0 26px rgba(58,233,255,.5);transform:translateY(-3px)}
+.spot.hidden{opacity:.12;pointer-events:none}
+.spot.just{animation:justBooked .9s var(--ease)}
+@keyframes justBooked{0%{box-shadow:0 0 0 0 rgba(255,177,61,.7)}100%{box-shadow:0 0 0 22px rgba(255,177,61,0)}}
+.panel{border-radius:13px;border:1px solid var(--line-2);background:rgba(255,255,255,.03);padding:16px}
+.panel h4{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.panel .big{font-size:30px;font-weight:800;letter-spacing:-.04em;margin-top:10px}
+.panel .big small{font-size:14px;color:var(--muted);font-weight:600;letter-spacing:0}
+.panel .rowline{display:flex;justify-content:space-between;font-size:12.5px;padding:7px 0;border-bottom:1px dashed var(--line-2);color:var(--muted)}
+.panel .rowline b{color:var(--ink-dim);font-family:var(--mono);font-weight:500}
+.hours{display:flex;gap:6px;margin:12px 0}
+.hours button{flex:1;padding:7px 0;border-radius:8px;border:1px solid var(--line);font-family:var(--mono);font-size:12.5px;color:var(--muted);transition:all .25s}
+.hours button[aria-pressed="true"]{background:rgba(58,233,255,.18);border-color:rgba(58,233,255,.5);color:var(--ink)}
+.panel .btn{width:100%;justify-content:center;margin-top:10px}
+.txline{margin-top:12px;font-family:var(--mono);font-size:11px;line-height:1.6;color:var(--muted);min-height:54px}
+.txline .st{display:flex;align-items:center;gap:7px}
+.txline .sp{width:11px;height:11px;border:2px solid rgba(58,233,255,.3);border-top-color:var(--cyan);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.txline .ok{color:var(--green)}
+.txline .hash{color:var(--cyan);word-break:break-all}
+.ui-side{display:grid;gap:14px}
+.ui-point{padding:17px 19px;border-radius:13px;border:1px solid var(--line-2);background:var(--glass);border-left:2px solid var(--cyan)}
+.ui-point:nth-child(2){border-left-color:var(--violet)}.ui-point:nth-child(3){border-left-color:var(--amber)}
+.ui-point b{font-size:14.5px;font-weight:700;display:block}
+.ui-point p{font-size:13px;line-height:1.5;color:var(--muted);margin-top:5px}
+.mock-label{margin-top:4px;padding:13px 16px;border-radius:12px;font-size:12.5px;line-height:1.5;color:var(--amber);background:rgba(255,177,61,.1);border:1px solid rgba(255,177,61,.3)}
+
+/* ============ SLIDE 8 — PLAN ============ */
+.timeline{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-bottom:28px}
+.timeline::before{content:"";position:absolute;left:30px;right:30px;top:19px;height:2px;background:var(--line);z-index:0}
+.timeline .bar{position:absolute;left:30px;top:19px;height:2px;background:linear-gradient(90deg,var(--green),var(--cyan));box-shadow:0 0 14px rgba(58,233,255,.7);z-index:1;width:0;transition:width 1.4s var(--ease) .3s}
+.slide.anim .timeline .bar{width:calc(33% - 10px)}
+.stage{position:relative;z-index:2;padding-top:0}
+.stage .pt{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-family:var(--mono);font-size:14px;font-weight:700;background:var(--bg-2);border:2px solid var(--line);color:var(--muted);margin-bottom:16px}
+.stage.done .pt{border-color:var(--green);color:var(--green);background:rgba(47,226,160,.14);box-shadow:0 0 22px rgba(47,226,160,.3)}
+.stage.now .pt{border-color:var(--cyan);color:var(--cyan);background:rgba(58,233,255,.14);box-shadow:0 0 22px rgba(58,233,255,.35)}
+.stage h3{font-size:21px;font-weight:800;letter-spacing:-.025em}
+.stage .when{font-family:var(--mono);font-size:12.5px;color:var(--cyan);margin-top:4px}
+.stage ul{margin-top:12px;display:grid;gap:7px}
+.stage li{font-size:13.5px;line-height:1.45;color:var(--muted);padding-left:16px;position:relative}
+.stage li::before{content:"";position:absolute;left:0;top:7px;width:5px;height:5px;border-radius:50%;background:var(--cyan);opacity:.6}
+.stage .state{display:inline-block;margin-top:12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:4px 9px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
+.stage.done .state{color:var(--green);border-color:rgba(47,226,160,.4);background:rgba(47,226,160,.1)}
+.stage.now .state{color:var(--cyan);border-color:rgba(58,233,255,.4);background:rgba(58,233,255,.1)}
+.plan-bottom{display:grid;grid-template-columns:1.25fr 1fr;gap:30px;align-items:start}
+.tasks{display:grid;gap:11px}
+.task{display:grid;grid-template-columns:auto 1fr;gap:15px;align-items:center;padding:14px 18px;border-radius:12px;border:1px solid var(--line-2);background:var(--glass);transition:border-color .35s,transform .35s var(--ease)}
+.task:hover{transform:translateX(6px);border-color:rgba(58,233,255,.4)}
+.task .av{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-weight:800;font-size:15px;background:linear-gradient(145deg,var(--cyan),var(--blue));color:#04121c}
+.task:nth-child(2) .av{background:linear-gradient(145deg,var(--violet),#5b3fd1);color:#fff}
+.task:nth-child(3) .av{background:linear-gradient(145deg,var(--amber),#d9761b);color:#2b1600}
+.task b{font-size:15px;font-weight:700}
+.task p{font-size:13px;color:var(--muted);margin-top:3px;line-height:1.42}
+.risks h4{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--amber);font-weight:700;margin-bottom:12px}
+.risks li{font-size:13.2px;line-height:1.5;color:var(--muted);padding:9px 0 9px 18px;border-bottom:1px dashed var(--line-2);position:relative}
+.risks li:last-child{border-bottom:0}
+.risks li::before{content:"!";position:absolute;left:0;top:9px;font-family:var(--mono);color:var(--amber);font-weight:700}
+.risks code{color:var(--cyan);font-size:12.5px}
+
+/* ============ TOOLBAR ============ */
+.toolbar{
+  position:fixed;left:0;right:0;bottom:0;height:68px;z-index:30;
+  display:flex;align-items:center;justify-content:space-between;gap:18px;padding:0 24px;
+  background:rgba(8,12,22,.94);border-top:1px solid var(--line-2);backdrop-filter:blur(14px);
+}
+.nav-group{display:flex;align-items:center;gap:12px}
+.icon{
+  width:38px;height:38px;border-radius:11px;border:1px solid var(--line);display:grid;place-items:center;
+  font-size:17px;color:var(--ink-dim);transition:all .25s;
+}
+.icon:hover{background:rgba(58,233,255,.14);border-color:rgba(58,233,255,.5);color:var(--ink)}
+.icon[aria-pressed="true"]{background:rgba(58,233,255,.18);border-color:rgba(58,233,255,.55);color:var(--cyan)}
+.count{font-family:var(--mono);font-size:13.5px;color:var(--muted);min-width:62px;text-align:center}
+.count b{color:var(--ink);font-size:16px}
+#dots{display:flex;gap:7px}
+.dot{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.2);transition:all .3s var(--ease)}
+.dot:hover{background:rgba(255,255,255,.45)}
+.dot.active{width:28px;border-radius:5px;background:linear-gradient(90deg,var(--cyan),var(--blue));box-shadow:0 0 14px rgba(58,233,255,.7)}
+.tool-right{display:flex;align-items:center;gap:9px}
+
+/* ============ NOTES / DIALOGS / TOAST ============ */
+#notes{
+  position:fixed;right:22px;bottom:80px;z-index:40;width:min(560px,calc(100vw - 44px));max-height:62vh;overflow:auto;
+  padding:22px 24px;border-radius:16px;background:rgba(10,15,28,.97);border:1px solid var(--line);
+  box-shadow:0 30px 70px rgba(0,0,0,.7);backdrop-filter:blur(16px);animation:rise .35s var(--ease) both;
+}
+#notes .nh{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:12px}
+#notes .nh span{font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan)}
+#notes h3{font-size:19px;font-weight:800;letter-spacing:-.02em;margin-bottom:9px}
+#notes p{font-size:14.8px;line-height:1.62;color:var(--ink-dim)}
+#notes .close{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);display:grid;place-items:center;color:var(--muted)}
+dialog{
+  width:min(960px,94vw);max-height:86vh;padding:30px;border:1px solid var(--line);border-radius:18px;
+  background:rgba(10,15,28,.98);color:var(--ink);box-shadow:0 40px 110px rgba(0,0,0,.8);
+}
+dialog::backdrop{background:rgba(3,5,11,.75);backdrop-filter:blur(6px)}
+.dh{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:20px}
+.dh h2{font-size:24px;font-weight:800;letter-spacing:-.03em}
+.dh button{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);display:grid;place-items:center;font-size:17px;color:var(--muted)}
+.ov-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:11px}
+.ov-item{display:grid;grid-template-columns:38px 1fr;gap:14px;align-items:center;padding:14px 16px;border-radius:12px;border:1px solid var(--line-2);background:var(--glass);text-align:left;transition:all .3s}
+.ov-item:hover{border-color:rgba(58,233,255,.5);transform:translateX(5px)}
+.ov-item.active{border-color:var(--cyan);background:rgba(58,233,255,.12)}
+.ov-item b{font-family:var(--mono);font-size:15px;color:var(--cyan)}
+.ov-item span{font-size:14.5px;font-weight:600}
+.ov-item small{display:block;font-size:12px;color:var(--muted);font-weight:400;margin-top:2px}
+.help-table{width:100%;border-collapse:collapse;font-size:14.5px}
+.help-table td{padding:11px 10px;border-bottom:1px solid var(--line-2);color:var(--ink-dim)}
+.help-table td:first-child{width:200px;font-family:var(--mono);font-size:13px;color:var(--cyan)}
+#toast{
+  position:fixed;left:50%;bottom:86px;transform:translateX(-50%);z-index:50;
+  padding:13px 22px;border-radius:12px;background:rgba(10,15,28,.97);border:1px solid rgba(58,233,255,.4);
+  font-size:14px;color:var(--ink);box-shadow:0 20px 50px rgba(0,0,0,.6);animation:pop .3s var(--ease) both;
+}
+
+/* ============ RESPONSIVE / MOTION / PRINT ============ */
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:.001s!important;animation-iteration-count:1!important;transition-duration:.001s!important}
+  .slide:not(.active){display:none}
+}
+@media (max-width:760px){
+  #stage{inset:56px 0 68px;overflow:auto}
+  #canvas{position:relative;left:auto;top:auto;transform:none;width:1600px;height:900px;margin:10px auto;--scale:1}
+  .top-right .chapter{display:none}
+}
+@media print{
+  @page{size:1600px 900px;margin:0}
+  html,body{width:1600px;height:auto;overflow:visible;background:#05070f}
+  .topbar,.toolbar,#notes,dialog,#toast{display:none!important}
+  #stage{position:static;inset:auto;overflow:visible}
+  #canvas{position:static;left:auto;top:auto;transform:none;border-radius:0;box-shadow:none;height:auto}
+  .slide{position:relative;opacity:1!important;visibility:visible!important;transform:none!important;page-break-after:always;height:900px}
+  .slide [data-a]{animation:none!important;opacity:1!important;transform:none!important}
+  .timeline .bar{width:calc(33% - 10px)!important;transition:none!important}
+  .check{opacity:1!important;transform:none!important}
+  .bg{position:absolute;height:100%}
+  .progress{display:none}
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo">P</span>ParkChain <small>— тұрақ орындарын басқару dApp</small></div>
+  <div class="top-right">
+    <span class="chapter" id="chapter">ТИТУЛ</span>
+    <span>№5 зертханалық жұмыс · 2026</span>
+  </div>
+</div>
+
+<main id="stage">
+<div id="canvas">
+
+  <div class="bg">
+    <div class="blob b1"></div><div class="blob b2"></div><div class="blob b3"></div>
+    <div class="mesh"></div><div class="sweep"></div><div class="vig"></div>
+  </div>
+  <div class="progress"><i id="progressBar"></i></div>
+
+  <!-- ===================== SLIDE 1 ===================== -->
+  <section class="slide cover" id="slide-1" data-title="Титул: ParkChain" data-section="ТИТУЛ">
+    <div class="body">
+      <div>
+        <p class="eyebrow" data-a="rise">Блокчейн технологиялары · Жобалау кезеңі</p>
+        <h1 data-a="rise">ParkChain</h1>
+        <p class="sub" data-a="rise">Тұрақ орындарының күйін<br>блокчейнде басқару</p>
+        <p class="lead" data-a="rise">Әр орынның бос/бос емес күйі смарт-контрактта сақталады. Бронь жасау, босату және тексеру — бәрі бірдей ережелермен, Ethereum желісінде орындалады.</p>
+        <div class="chips">
+          <span class="chip" data-a="pop"><span class="dot-live"></span>Solidity <b>0.8.x</b></span>
+          <span class="chip" data-a="pop">ethers.js <b>+ MetaMask</b></span>
+          <span class="chip" data-a="pop">Ethereum <b>Sepolia</b></span>
+        </div>
+        <div class="team">
+          <div class="member" data-a="rise"><div class="name" contenteditable="true" spellcheck="false" data-slot="m1">Сәбит Абзал</div><p>Смарт-контракт архитектурасы: struct, mapping, require шарттары және event</p></div>
+          <div class="member" data-a="rise"><div class="name" contenteditable="true" spellcheck="false" data-slot="m2">Мынтаев Ельнар</div><p>Интерфейс макеті, ethers.js + MetaMask интеграциясы және тест жоспары</p></div>
+        </div>
+      </div>
+      <div class="lot-wrap" data-a="right">
+        <div class="lot">
+          <div class="lot-head">
+            <span class="t">Оқу тұрағы · 24 орын</span>
+            <span class="legend"><span><i style="background:rgba(58,233,255,.6)"></i>бос</span><span><i style="background:rgba(255,177,61,.7)"></i>бос емес</span></span>
+          </div>
+          <div class="lot-grid" id="lotGrid"></div>
+          <div class="lane">
+            <div class="drive"><div class="car c2"></div></div>
+            <div class="drive d2"><div class="car c4"></div></div>
+            <div class="drive d3"><div class="car c5"></div></div>
+          </div>
+        </div>
+        <div class="visual-stats">
+          <div><b>24</b><span>тұрақ орны<br>оқу жобасында</span></div>
+          <div><b>3</b><span>негізгі әрекет<br>қосу · оқу · өзгерту</span></div>
+          <div><b>4</b><span>require() шарты<br>контракт ережелері</span></div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Жоспарлау кезеңі — код, компиляция және deploy талап етілмейді</span>
+      <span>Қорғау: 19 қазан 2026 · Жоба мерзімі: 15–29 қазан</span>
+      <span class="num">01 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 2 ===================== -->
+  <section class="slide" id="slide-2" data-title="Мәселе және мақсат" data-section="МӘСЕЛЕ">
+    <header>
+      <p class="eyebrow" data-a="rise">02 / Мәселе және мақсат</p>
+      <h2 data-a="rise">«Бос орын бар ма?» — жауабы <em>бір дереккөзде</em> болуы керек</h2>
+    </header>
+    <div class="body">
+      <div class="problem-grid">
+        <div>
+          <p class="statement" data-a="left"><span>Бір орын.</span><span>Бір бронь.</span><span class="hi">Бір шындық.</span></p>
+          <p class="scope" data-a="left">ParkChain тұрақ орнын қосу, брондау және босату шарттарын Ethereum контрактында орындайды. Күйді өзгерту тек транзакция арқылы болады.</p>
+          <div class="metrics">
+            <div class="metric" data-a="left"><b data-count="1">0</b><span>орын = <b style="font-size:14px;color:var(--ink-dim)">1</b> on-chain жазба, қолмен түзетілмейді</span></div>
+            <div class="metric" data-a="left"><b data-count="3">0</b><span>негізгі әрекет: <code>addSpot</code> · <code>getSpot</code> · <code>bookSpot</code></span></div>
+            <div class="metric" data-a="left"><b data-count="4">0</b><span>require() шарты әр жазу әрекетін тексереді</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="problems">
+            <div class="problem" data-a="right"><span class="n">01</span><div><h3>Қос бронь</h3><p>Қолмен жүргізілетін тізімде бір орынға екі жүргізуші төлем жасап қалады. Кім бірінші екенін дәлелдейтін ортақ жазба жоқ.</p></div></div>
+            <div class="problem" data-a="right"><span class="n">02</span><div><h3>Деректерге сенім</h3><p>Орталық базадағы «бос/бос емес» жазбасын оператор кез келген уақытта өзгерте алады, өзгеріс тарихы сақталмайды.</p></div></div>
+            <div class="problem" data-a="right"><span class="n">03</span><div><h3>Тексерілмейтін тарих</h3><p>Орынды кім, қашан және қанша уақытқа алғанын тәуелсіз тексеру мүмкіндігі жоқ — есеп операторда ғана.</p></div></div>
+          </div>
+          <div class="goal" data-a="rise"><b>Мақсат</b><p>Орын күйін өзгертетін әр әрекет контракттағы бірдей <code>require()</code> шарттарынан өтеді, нәтижесі блокчейнде оқиға (<code>event</code>) ретінде қалады. Сондықтан «бос орын» деген жауап барлығы үшін бірдей.</p></div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Бұл оқу жобасы — нақты тұрақты басқаруға арналмаған</span>
+      <span>Блокчейн беретін мүмкіндік: ортақ күй, өзгертілмейтін тарих, автоматты ереже</span>
+      <span class="num">02 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 3 ===================== -->
+  <section class="slide" id="slide-3" data-title="Пайдаланушылар мен мүмкіндіктер" data-section="ПАЙДАЛАНУШЫЛАР">
+    <header>
+      <p class="eyebrow" data-a="rise">03 / Рөлдер және негізгі мүмкіндіктер</p>
+      <h2 data-a="rise">Кім қолданады және <em>не істей алады</em></h2>
+    </header>
+    <div class="body">
+      <div class="roles">
+        <div class="role" data-a="rise"><span class="ico">🅿️</span><h3>Тұрақ иесі</h3><p class="en">owner / admin</p><p>Жаңа орын қосады, аймақ пен сағаттық бағаны белгілейді, бақылаушыға рұқсат береді.</p><span class="perm">addSpot · setOperator</span></div>
+        <div class="role" data-a="rise"><span class="ico">🚗</span><h3>Жүргізуші</h3><p class="en">driver</p><p>Бос орындарды көреді, сағат санын таңдап бронь жасайды және төлемді MetaMask арқылы жібереді.</p><span class="perm">bookSpot · releaseSpot</span></div>
+        <div class="role" data-a="rise"><span class="ico">🛡️</span><h3>Бақылаушы</h3><p class="en">operator</p><p>Орындағы көліктің брондалғанын тексереді, мерзімі өткен бронды мәжбүрлі босатады.</p><span class="perm">releaseSpot (expired)</span></div>
+        <div class="role" data-a="rise"><span class="ico">🔍</span><h3>Тексеруші</h3><p class="en">auditor / public</p><p>Орын күйін, бронь деректерін және оқиғалар журналын кошелексіз оқи алады.</p><span class="perm">read-only</span></div>
+      </div>
+      <div class="actions">
+        <div class="action" data-a="pop"><div><p class="step">01 · ҚОСУ</p><h4>addSpot()</h4><p>Тұрақ иесі жаңа орынды аймақ және бағасымен тіркейді</p></div></div>
+        <div class="action" data-a="pop"><div><p class="step">02 · ОҚУ</p><h4>getSpot()</h4><p>Интерфейс орын күйін оқиды — газ төленбейді</p></div></div>
+        <div class="action" data-a="pop"><div><p class="step">03 · ӨЗГЕРТУ</p><h4>bookSpot() / releaseSpot()</h4><p>Жүргізуші орынды брондайды, кейін босатады</p></div></div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Рөл контрактта адрес бойынша тексеріледі: <code>owner</code> және <code>isOperator[addr]</code></span>
+      <span>Кошелек қоспаған пайдаланушы деректерді оқи алады, өзгерте алмайды</span>
+      <span class="num">03 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 4 ===================== -->
+  <section class="slide" id="slide-4" data-title="dApp архитектурасы" data-section="АРХИТЕКТУРА">
+    <header>
+      <p class="eyebrow" data-a="rise">04 / dApp архитектурасы</p>
+      <h2 data-a="rise">Интерфейстен контрактқа дейінгі <em>жол</em></h2>
+      <div class="mode-tabs" data-a="rise" role="group" aria-label="Деректер ағынының түрі">
+        <button data-mode="write" aria-pressed="true">Жазу · транзакция</button>
+        <button data-mode="read" aria-pressed="false">Оқу · view</button>
+      </div>
+    </header>
+    <div class="body">
+      <div class="flow" id="flow">
+        <div class="bypass"><svg viewBox="0 0 1000 60" preserveAspectRatio="none"><path d="M 760 55 C 700 -22, 300 -22, 240 55"/></svg></div>
+        <div class="node" data-a="pop"><span class="ico">🖥️</span><p class="badge">1 · Frontend</p><h3>React + Vite</h3><p>Орын торы, аймақ сүзгісі және бронь формасы. Пайдаланушы әрекетін функция шақыруына айналдырады.</p></div>
+        <div class="wire"><i></i><i></i><i></i></div>
+        <div class="node" data-a="pop"><span class="ico">🧩</span><p class="badge">2 · Кітапхана</p><h3>ethers.js</h3><p>ABI арқылы контракт функциясын, параметрлерін және қайтарылатын мәнді дайындайды.</p></div>
+        <div class="wire"><i></i><i></i><i></i></div>
+        <div class="node sign" data-a="pop"><span class="ico">🦊</span><p class="badge">3 · Кошелек</p><h3>MetaMask</h3><p>Аккаунтты қосады және транзакцияға қол қояды. Жеке кілт браузерден шықпайды.</p><span class="skip">view сұрауына қол қою қажет емес</span></div>
+        <div class="wire"><i></i><i></i><i></i></div>
+        <div class="node" data-a="pop"><span class="ico">⛓️</span><p class="badge">4 · Желі</p><h3>Ethereum / Sepolia</h3><p>Транзакцияны блокқа кіргізеді, газ есептейді және нәтижені барлық түйінге таратады.</p></div>
+        <div class="wire"><i></i><i></i><i></i></div>
+        <div class="node" data-a="pop"><span class="ico">📜</span><p class="badge">5 · Контракт</p><h3>ParkingManager.sol</h3><p>require() шарттарын тексереді, орын күйін сақтайды және event шығарады.</p></div>
+      </div>
+      <div class="flow-note">
+        <div class="note-box" data-a="rise"><h4 id="modeTitle">Жазу жолы — транзакция</h4><p id="modeLine">Жүргізуші «Бронь жасау» батырмасын басады → ethers.js <code>bookSpot(id, hours)</code> шақыруын құрастырады → MetaMask қол қоюды сұрайды → транзакция Sepolia желісіне жіберіледі → контракт шарттарды тексеріп, орын күйін өзгертеді. Шарт бұзылса, барлық өзгеріс кері қайтарылады.</p></div>
+        <div class="note-box" data-a="rise"><h4>ABI не үшін қажет?</h4><p><code>ABI</code> — контракт функцияларының атын, параметр түрлерін және қайтаратын мәнін сипаттайтын JSON. Frontend оны пайдаланып қай функцияны қалай шақыратынын біледі; онсыз байт-кодпен сөйлесу мүмкін емес.</p></div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Жоғарыдағы батырмамен ағын түрін ауыстырыңыз</span>
+      <span>Жазу = газ + қол қою · Оқу = тікелей RPC сұрауы</span>
+      <span class="num">04 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 5 ===================== -->
+  <section class="slide" id="slide-5" data-title="Контракт деректері" data-section="СМАРТ-КОНТРАКТ">
+    <header>
+      <p class="eyebrow" data-a="rise">05 / Деректер құрылымы</p>
+      <h2 data-a="rise">Контрактта <em>не сақталады</em></h2>
+    </header>
+    <div class="body">
+      <div class="data-grid">
+        <div>
+          <div class="struct" data-a="left">
+            <div class="struct-head"><h3>struct Spot</h3><span>негізгі объект — бір тұрақ орны</span></div>
+            <div class="fields">
+              <div class="field"><code><em>uint</em> id</code><span>орын нөмірі (1-ден басталады)</span></div>
+              <div class="field"><code><em>string</em> zone</code><span>аймақ белгісі: "A-1", "B-2"</span></div>
+              <div class="field"><code><em>uint</em> pricePerHour</code><span>сағаттық баға, wei</span></div>
+              <div class="field"><code><em>bool</em> occupied</code><span>бос емес күйі</span></div>
+              <div class="field"><code><em>address</em> driver</code><span>ағымдағы жүргізуші адресі</span></div>
+              <div class="field"><code><em>uint</em> bookedUntil</code><span>бронь аяқталатын уақыт</span></div>
+            </div>
+          </div>
+          <div class="struct" data-a="left">
+            <div class="struct-head"><h3>struct Booking</h3><span>бір бронь жазбасы</span></div>
+            <div class="fields">
+              <div class="field"><code><em>uint</em> spotId / hours</code><span>қай орын және қанша сағат</span></div>
+              <div class="field"><code><em>address</em> driver</code><span>брондаған адрес</span></div>
+              <div class="field"><code><em>uint</em> amountPaid</code><span>төленген сома, wei</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="code-panel" data-a="right">
+          <div class="code-bar"><span class="dots"><i></i><i></i><i></i></span><span class="name">ParkingManager.sol</span><span class="ver">жоспар · Solidity 0.8.x</span></div>
+          <pre id="codeTarget" aria-label="Контракттың жоспарланған құрылымы"></pre>
+        </div>
+      </div>
+      <div class="map-strip">
+        <div class="mapc" data-a="pop"><code>spots[spotId]</code><span>Spot — орынның ағымдағы күйі</span></div>
+        <div class="mapc" data-a="pop"><code>bookings[spotId]</code><span>Booking — соңғы бронь</span></div>
+        <div class="mapc" data-a="pop"><code>driverSpots[addr]</code><span>uint[] — жүргізушінің орындары</span></div>
+        <div class="mapc" data-a="pop"><code>isOperator[addr]</code><span>bool — бақылаушы рұқсаты</span></div>
+        <div class="mapc" data-a="pop"><code>spotCount</code><span>uint — тіркелген орын саны</span></div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Код мысалы — жоспар. №6 кезеңде нақты контракт жазылады</span>
+      <span>Негізгі объект: <code>Spot</code> · қосымша: <code>Booking</code></span>
+      <span class="num">05 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 6 ===================== -->
+  <section class="slide" id="slide-6" data-title="Функциялар және шарттар" data-section="ЕРЕЖЕЛЕР">
+    <header>
+      <p class="eyebrow" data-a="rise">06 / Функциялар және require()</p>
+      <h2 data-a="rise">Әр әрекет <em>шарттардан өтеді</em></h2>
+    </header>
+    <div class="body">
+      <div class="rules-grid">
+        <div>
+          <div class="fn" data-a="left"><div><h3>addSpot(zone, pricePerHour)</h3><p>Жаңа тұрақ орнын тіркейді, spotCount өседі</p></div><div class="tags"><span class="tag write">write</span><span class="tag own">owner</span></div></div>
+          <div class="fn" data-a="left"><div><h3>getSpot(id)</h3><p>Орынның аймағын, бағасын және күйін қайтарады</p></div><div class="tags"><span class="tag read">view</span></div></div>
+          <div class="fn" data-a="left"><div><h3>bookSpot(id, hours) payable</h3><p>Бос орынды брондайды, төлемді контрактта ұстайды</p></div><div class="tags"><span class="tag write">write</span></div></div>
+          <div class="fn" data-a="left"><div><h3>releaseSpot(id)</h3><p>Орынды босатады, күйін және driver өрісін тазартады</p></div><div class="tags"><span class="tag write">write</span></div></div>
+          <div class="fn" data-a="left"><div><h3>setOperator(addr, ok)</h3><p>Бақылаушы рұқсатын береді немесе алып қояды</p></div><div class="tags"><span class="tag write">write</span><span class="tag own">owner</span></div></div>
+          <div class="fn" data-a="left"><div><h3>getFreeSpots()</h3><p>Бос орындардың тізімін қайтарады (интерфейс үшін)</p></div><div class="tags"><span class="tag read">view</span></div></div>
+          <div class="rules-foot">
+            <div data-a="left"><strong>Оқиғалар (event)</strong>SpotAdded, SpotBooked, SpotReleased — интерфейс тарихты осы оқиғалар арқылы көрсетеді.</div>
+            <div data-a="left"><strong>Уақыт есебі</strong><code>block.timestamp</code> арқылы: бронь аяқталғанша тек иесі, аяқталған соң operator да босата алады.</div>
+          </div>
+        </div>
+        <div class="sim" data-a="right">
+          <div class="sim-head"><h3>bookSpot() тексеру симуляторы</h3><span class="hint">сценарийді таңдаңыз</span></div>
+          <div class="cases" role="group" aria-label="Сценарийлер">
+            <button data-case="ok" aria-pressed="true">Бос орын + дәл төлем</button>
+            <button data-case="busy" aria-pressed="false">Орын брондалған</button>
+            <button data-case="pay" aria-pressed="false">Төлем сәйкес емес</button>
+            <button data-case="perm" aria-pressed="false">Басқа адам босатады</button>
+          </div>
+          <div class="checks" id="checks">
+            <div class="check" data-r="0"><span class="st">1</span><code>require(spots[id].id != 0, "Spot not found")</code><span class="lbl">R1</span></div>
+            <div class="check" data-r="1"><span class="st">2</span><code>require(!spots[id].occupied, "Spot already booked")</code><span class="lbl">R2</span></div>
+            <div class="check" data-r="2"><span class="st">3</span><code>require(msg.value == price * hours, "Wrong payment")</code><span class="lbl">R3</span></div>
+            <div class="check" data-r="3"><span class="st">4</span><code>require(msg.sender == driver || isOperator[msg.sender], "Not allowed")</code><span class="lbl">R4</span></div>
+          </div>
+          <div class="verdict" id="verdict"><b>Нәтиже</b>Сценарийді таңдаңыз — шарттар кезекпен тексеріледі.</div>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>require() шарты орындалмаса, транзакцияның барлық күй өзгерісі кері қайтарылады</span>
+      <span>Жазу функциясы: 4 · Оқу функциясы: 2</span>
+      <span class="num">06 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 7 ===================== -->
+  <section class="slide" id="slide-7" data-title="Интерфейс макеті" data-section="ИНТЕРФЕЙС">
+    <header>
+      <p class="eyebrow" data-a="rise">07 / Интерфейс макеті</p>
+      <h2 data-a="rise">Болашақ қосымшаның <em>басты беті</em></h2>
+    </header>
+    <div class="body">
+      <div class="ui-grid">
+        <div class="app" data-a="rise">
+          <div class="app-bar">
+            <span class="logo">P</span><span class="nm">ParkChain</span>
+            <span class="net">Sepolia · chainId 11155111</span>
+            <button class="btn primary wallet off" id="walletBtn">🦊 Connect Wallet</button>
+          </div>
+          <div class="app-filters" role="group" aria-label="Аймақ сүзгісі">
+            <button data-zone="all" aria-pressed="true">Барлығы</button>
+            <button data-zone="A" aria-pressed="false">A аймағы</button>
+            <button data-zone="B" aria-pressed="false">B аймағы</button>
+            <button data-zone="C" aria-pressed="false">C аймағы</button>
+            <span class="free-count" id="freeCount">бос: 0 / 24</span>
+          </div>
+          <div class="app-body">
+            <div class="spot-grid" id="spotGrid"></div>
+            <div class="panel">
+              <h4>Таңдалған орын</h4>
+              <div class="big"><span id="selTitle">—</span><small id="selZone"></small></div>
+              <div class="rowline"><span>Күйі</span><b id="selState">таңдалмады</b></div>
+              <div class="rowline"><span>Сағаттық баға</span><b id="selPrice">—</b></div>
+              <div class="hours" role="group" aria-label="Сағат саны">
+                <button data-h="1" aria-pressed="true">1 сағ</button>
+                <button data-h="2" aria-pressed="false">2 сағ</button>
+                <button data-h="4" aria-pressed="false">4 сағ</button>
+              </div>
+              <div class="rowline"><span>Жалпы сома</span><b id="selTotal">—</b></div>
+              <button class="btn primary" id="bookBtn" disabled>Бронь жасау</button>
+              <div class="txline" id="txLine">Орынды таңдап, бронь жасап көріңіз.</div>
+            </div>
+          </div>
+        </div>
+        <div class="ui-side">
+          <div class="ui-point" data-a="right"><b>Connect Wallet</b><p>MetaMask аккаунтын қосады. Адрес қосылғанша жазу әрекеті өшірулі болады.</p></div>
+          <div class="ui-point" data-a="right"><b>Аймақ сүзгісі және орын торы</b><p>Көк үзік сызық — бос, сары — бос емес. Орынды басу мәліметтерді оң панельге шығарады.</p></div>
+          <div class="ui-point" data-a="right"><b>Транзакция күйі</b><p>Бронь басылғанда pending → confirmed күйлері және tx hash көрсетіледі.</p></div>
+          <p class="mock-label" data-a="right">Бұл — интерактивті макет. Нақты транзакция жіберілмейді, контракт әлі жазылған жоқ. Макетті қайта бастау үшін <b>R</b> пернесін басыңыз.</p>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Макет осы презентацияда жұмыс істейді — орынды басып көріңіз</span>
+      <span>№6 кезеңде осы интерфейс React-та нақты контрактпен байланысады</span>
+      <span class="num">07 / 08</span>
+    </footer>
+  </section>
+
+  <!-- ===================== SLIDE 8 ===================== -->
+  <section class="slide" id="slide-8" data-title="Жұмыс жоспары" data-section="ЖОСПАР">
+    <header>
+      <p class="eyebrow" data-a="rise">08 / Әзірлеу жоспары</p>
+      <h2 data-a="rise">Келесі екі апта және <em>міндеттер бөлінісі</em></h2>
+    </header>
+    <div class="body">
+      <div class="timeline">
+        <div class="bar"></div>
+        <div class="stage done" data-a="pop"><div class="pt">№5</div><h3>Жобалау</h3><p class="when">15–19 қазан</p><ul><li>Тақырып және мақсат</li><li>Архитектура схемасы</li><li>struct, mapping жоспары</li><li>Интерфейс макеті</li></ul><span class="state">орындалды</span></div>
+        <div class="stage now" data-a="pop"><div class="pt">№6</div><h3>Әзірлеу</h3><p class="when">20–26 қазан</p><ul><li>ParkingManager.sol жазу</li><li>Remix-те компиляция</li><li>require() шарттарын тексеру</li><li>Интерфейстің алғашқы нұсқасы</li></ul><span class="state">келесі кезең</span></div>
+        <div class="stage" data-a="pop"><div class="pt">№7</div><h3>Интеграция</h3><p class="when">27–29 қазан</p><ul><li>ethers.js + MetaMask байланысы</li><li>Sepolia-ға deploy</li><li>Транзакция сценарийлерін тестілеу</li><li>Қорғау</li></ul><span class="state">жоспарда</span></div>
+      </div>
+      <div class="plan-bottom">
+        <div class="tasks">
+          <div class="task" data-a="left"><span class="av" data-av="m1">С</span><div><b data-mirror="m1">Сәбит Абзал</b><p>Контракт: struct Spot / Booking, mapping, require шарттары, event тізімі, Remix-те компиляция</p></div></div>
+          <div class="task" data-a="left"><span class="av" data-av="m2">М</span><div><b data-mirror="m2">Мынтаев Ельнар</b><p>Frontend: орын торы, аймақ сүзгісі, бронь формасы, ethers.js + MetaMask байланысы және Sepolia deploy</p></div></div>
+          <div class="task" data-a="left"><span class="av">∑</span><div><b>Бірлескен жұмыс</b><p>Тест сценарийлері, презентация және қорғауға дайындық — екеуі бірге</p></div></div>
+        </div>
+        <div class="risks" data-a="right">
+          <h4>Назарда ұстайтын тәуекелдер</h4>
+          <ul>
+            <li>Уақыт есебі <code>block.timestamp</code> арқылы — дәлдігі блок уақытына байланысты, минутпен жұмыс істейміз</li>
+            <li>Төлемді қайтару логикасы <code>checks → effects → interactions</code> ретімен жазылады</li>
+            <li><code>string zone</code> газды көп жейді — қажет болса <code>bytes32</code> нұсқасына көшеміз</li>
+            <li>Sepolia test ETH алдын ала faucet арқылы дайындалады</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <footer class="foot">
+      <span>Тапсыру форматы: 8 слайд + архитектура схемасы + контракт жоспары</span>
+      <span>Қорғауда әр мүше өз үлесін түсіндіреді</span>
+      <span class="num">08 / 08</span>
+    </footer>
+  </section>
+
+</div>
+</main>
+
+<nav class="toolbar" aria-label="Презентацияны басқару">
+  <div class="nav-group">
+    <button class="icon" id="prevBtn" aria-label="Алдыңғы слайд" title="Алдыңғы слайд (←)">‹</button>
+    <span class="count"><b id="curNum">01</b> / 08</span>
+    <button class="icon" id="nextBtn" aria-label="Келесі слайд" title="Келесі слайд (→)">›</button>
+    <div id="dots" role="tablist" aria-label="Слайдтар"></div>
+  </div>
+  <div class="tool-right">
+    <button class="icon" id="notesBtn" aria-pressed="false" aria-label="Спикер жазбасы" title="Спикер жазбасы (N)">🗒</button>
+    <button class="icon" id="ovBtn" aria-label="Мазмұны" title="Мазмұны (O)">▦</button>
+    <button class="icon" id="helpBtn" aria-label="Басқару" title="Басқару (?)">?</button>
+    <button class="icon" id="printBtn" aria-label="PDF-ке басып шығару" title="PDF (P)">⎙</button>
+    <button class="icon" id="fsBtn" aria-pressed="false" aria-label="Толық экран" title="Толық экран (F)">⛶</button>
+  </div>
+</nav>
+
+<aside id="notes" hidden aria-label="Спикер жазбасы">
+  <div class="nh"><span id="notesMeta">Спикер жазбасы</span><button class="close" id="notesClose" aria-label="Жабу">×</button></div>
+  <h3 id="notesTitle"></h3>
+  <p id="notesText"></p>
+</aside>
+
+<dialog id="ovDialog" aria-labelledby="ovTitle">
+  <div class="dh"><h2 id="ovTitle">Презентация мазмұны</h2><button data-close aria-label="Жабу">×</button></div>
+  <div class="ov-grid" id="ovGrid"></div>
+</dialog>
+
+<dialog id="helpDialog" aria-labelledby="helpTitle">
+  <div class="dh"><h2 id="helpTitle">Басқару</h2><button data-close aria-label="Жабу">×</button></div>
+  <table class="help-table"><tbody>
+    <tr><td>← / → · Space</td><td>Алдыңғы / келесі слайд</td></tr>
+    <tr><td>Home / End</td><td>Бірінші / соңғы слайд</td></tr>
+    <tr><td>1 … 8</td><td>Нөмірі бойынша слайдқа өту</td></tr>
+    <tr><td>N</td><td>Спикер жазбасын ашу / жабу</td></tr>
+    <tr><td>O</td><td>Мазмұн тізімі</td></tr>
+    <tr><td>F</td><td>Толық экран (немесе браузерде F11)</td></tr>
+    <tr><td>P</td><td>PDF-ке басып шығару</td></tr>
+    <tr><td>R</td><td>7-слайдтағы макетті қайта бастау</td></tr>
+    <tr><td>Esc</td><td>Жазбаны / терезені жабу</td></tr>
+    <tr><td>Свайп</td><td>Телефонда солға/оңға жүргізу</td></tr>
+  </tbody></table>
+  <p style="margin-top:16px;font-size:13.5px;color:var(--muted);line-height:1.55">Титул слайдындағы команда мүшелерінің атын тікелей басып өзгертуге болады — өзгеріс браузерде сақталады және 8-слайдта да жаңарады.</p>
+</dialog>
+
+<div id="toast" hidden role="status"></div>
+<div id="announcer" class="sr" aria-live="polite"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const slides = [...document.querySelectorAll('.slide')];
+const dialogs = [...document.querySelectorAll('dialog')];
+const TOTAL = slides.length;
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let index = 0, notesOpen = false, toastTimer = null, touch = null;
+
+/* ---------- speaker notes ---------- */
+const notes = [
+  'Сәлеметсіздер ме! Біздің жобамыз ParkChain деп аталады. Бұл — тұрақ орындарының бос және бос емес күйін блокчейнде басқаратын оқу dApp-і. Пайдаланушы бос орынды көреді, сағат санын таңдап бронь жасайды, ал орынның күйі смарт-контрактта сақталады. Қазір біз №5 кезеңдеміз: жоба жоспары, архитектура және контракт құрылымы дайын. Код пен deploy келесі кезеңдерде болады.',
+  'Мәселе үш жағдайдан тұрады. Біріншісі — қос бронь: қолмен жүргізілген тізімде бір орынға екі адам төлем жасап қалады. Екіншісі — деректерге сенім: орталық базадағы жазбаны оператор өзгерте алады, тарихы қалмайды. Үшіншісі — тексерілмейтін тарих: орынды кім, қашан алғанын тәуелсіз тексеру мүмкін емес. Мақсатымыз — күйді өзгертетін әр әрекет контракттағы бірдей require шарттарынан өтіп, нәтижесі блокчейнде қалуы.',
+  'Жүйеде төрт рөл бар. Тұрақ иесі — owner, ол орын қосады, баға белгілейді және бақылаушы тағайындайды. Жүргізуші — негізгі пайдаланушы, бос орынды брондайды және босатады. Бақылаушы — operator, мерзімі өткен бронды мәжбүрлі босата алады. Тексеруші тек оқиды, оған кошелек қажет емес. Үш негізгі әрекет: қосу — addSpot, оқу — getSpot, өзгерту — bookSpot және releaseSpot.',
+  'Архитектурада бес бөлік бар. React интерфейсі пайдаланушы әрекетін қабылдайды. ethers.js ABI арқылы функция шақыруын дайындайды. Жазу әрекетінде MetaMask қол қоюды сұрайды, содан кейін транзакция Sepolia желісіне барады және контракт шарттарды тексереді. Жоғарыдағы батырмамен оқу жолын көрсетуге болады: view сұрауына қол қою да, газ да қажет емес — деректер RPC арқылы тікелей оқылады. ABI — функция аттары мен параметр түрлерін сипаттайтын JSON, онсыз frontend контрактпен сөйлесе алмайды.',
+  'Контрактта екі struct жоспарланған. Spot — тұрақ орнының өзі: id, аймақ, сағаттық баға, occupied күйі, ағымдағы жүргізуші адресі және бронь аяқталатын уақыт. Booking — бронь жазбасы: қай орын, кім, қашан, қанша сағат және қанша төленді. Mapping арқылы орынды нөмірі бойынша табамыз: spots[spotId]. Сондай-ақ isOperator арқылы рұқсатты, driverSpots арқылы жүргізушінің брондарын сақтаймыз. Маңызды тұсы — орын жойылмайды, тек күйі өзгереді, сондықтан тарих сақталады.',
+  'Алты функция жоспарланған: addSpot, getSpot, bookSpot, releaseSpot, setOperator және getFreeSpots. Төртеуі жазу, екеуі оқу функциясы. Оң жақта bookSpot функциясының тексеру симуляторы бар. Сценарийді таңдағанда require шарттары кезекпен тексеріледі. Бос орын және дәл төлем болса, бронь жазылады. Орын брондалған болса — Spot already booked. Төлем сәйкес келмесе — Wrong payment. Басқа адам босатуға тырысса — Not allowed. Шарт бұзылса, барлық күй өзгерісі кері қайтарылады.',
+  'Бұл — болашақ интерфейстің макеті, және ол осы презентацияда жұмыс істейді. Жоғарыда Connect Wallet батырмасы, аймақ сүзгісі және орын торы бар. Көк үзік сызықпен белгіленген орын бос, сары — бос емес. Бос орынды басамыз, сағат санын таңдаймыз, жалпы сома есептеледі. Бронь жасау басылғанда транзакция күйі көрінеді: MetaMask растауы, кейін блокқа кіруі және tx hash. Ескерте кетейін — бұл макет, нақты транзакция жіберілмейді.',
+  'Жоспарымыз үш кезеңнен тұрады. №5 — жобалау, қазір аяқталды. №6 кезеңде ParkingManager.sol жазылады, Remix-те компиляцияланады және интерфейстің алғашқы нұсқасы дайындалады. №7 кезеңде ethers.js пен MetaMask байланысы, Sepolia-ға deploy және транзакция сценарийлерін тестілеу болады. Міндеттер екі мүшеге бөлінген: Абзал контрактты жазады, Ельнар интерфейс пен интеграцияны алады, ал тест сценарийлері мен презентацияны бірге дайындаймыз. Тәуекелдерді де ескердік: уақыт есебі block.timestamp арқылы, төлем логикасы checks-effects-interactions ретімен, ал string zone газды көп жесе bytes32-ге көшеміз. Сұрақтарыңызды тыңдаймыз!'
+];
+
+/* ---------- toast ---------- */
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+}
+
+/* ---------- scale ---------- */
+function resize(){
+  if (innerWidth <= 760) { document.documentElement.style.setProperty('--scale', 1); return; }
+  const r = $('stage').getBoundingClientRect();
+  const s = Math.min((r.width - 36) / 1600, (r.height - 28) / 900);
+  document.documentElement.style.setProperty('--scale', s);
+}
+
+/* ---------- cover: parking lot ---------- */
+(function lot(){
+  const g = $('lotGrid'); if (!g) return;
+  const taken = [0,2,3,5,6,9,11];      // occupied slots
+  const cycle = 7;                      // the animated one
+  const cls = ['c1','c2','c3','c4','c5'];
+  for (let i = 0; i < 12; i++){
+    const d = document.createElement('div');
+    d.className = 'pslot' + (taken.includes(i) ? ' taken' : '') + (i === cycle ? ' cycle' : '');
+    d.innerHTML = '<span class="code">' + (i < 6 ? 'A-' : 'B-') + ((i % 6) + 1) + '</span>';
+    if (taken.includes(i)) d.insertAdjacentHTML('beforeend', '<span class="car ' + cls[i % 5] + '"></span>');
+    else if (i === cycle) d.insertAdjacentHTML('beforeend', '<span class="pmark">P</span><span class="car c3"></span>');
+    else d.insertAdjacentHTML('beforeend', '<span class="pmark">P</span>');
+    g.append(d);
+  }
+})();
+
+/* ---------- editable team names ---------- */
+(function team(){
+  const KEY = 'parkchain.team.v2';
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch {}
+  document.querySelectorAll('[data-slot]').forEach(el => {
+    const k = el.dataset.slot;
+    if (saved[k]) el.textContent = saved[k];
+    mirror(k, el.textContent);
+    el.addEventListener('input', () => {
+      const v = el.textContent.replace(/\s+/g, ' ').trim() || 'Аты-жөні';
+      mirror(k, v);
+      try { saved[k] = v; localStorage.setItem(KEY, JSON.stringify(saved)); } catch {}
+    });
+    el.addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); el.blur(); } });
+    el.addEventListener('blur', () => { if (!el.textContent.trim()) el.textContent = 'Аты-жөні'; });
+  });
+  function mirror(k, v){
+    const name = (v || '').trim();
+    document.querySelectorAll('[data-mirror="' + k + '"]').forEach(n => { n.textContent = name; });
+    document.querySelectorAll('[data-av="' + k + '"]').forEach(n => { n.textContent = (name[0] || '•').toUpperCase(); });
+  }
+})();
+
+/* ---------- slide 4: flow mode ---------- */
+const modeText = {
+  write: ['Жазу жолы — транзакция',
+    'Жүргізуші «Бронь жасау» батырмасын басады → ethers.js <code>bookSpot(id, hours)</code> шақыруын құрастырады → MetaMask қол қоюды сұрайды → транзакция Sepolia желісіне жіберіледі → контракт шарттарды тексеріп, орын күйін өзгертеді. Шарт бұзылса, барлық өзгеріс кері қайтарылады.'],
+  read: ['Оқу жолы — view сұрауы',
+    'Интерфейс <code>getSpot(id)</code> немесе <code>getFreeSpots()</code> шақырады → ethers.js сұрауды RPC арқылы тікелей желіге жібереді → контракт мәнді қайтарады. Бұл жолда <strong>MetaMask қол қоюы және газ қажет емес</strong>, себебі блокчейндегі күй өзгермейді. Сондықтан орын торы кошелек қоспай-ақ көрінеді.']
+};
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => {
+  const read = b.dataset.mode === 'read';
+  document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  $('flow').classList.toggle('read', read);
+  const t = modeText[read ? 'read' : 'write'];
+  $('modeTitle').textContent = t[0];
+  $('modeLine').innerHTML = t[1];
+});
+
+/* ---------- slide 5: code typing ---------- */
+const CODE = [
+  ['cm', '// ParkingManager.sol — жоспарланған құрылым'], ['', '\n'],
+  ['kw', 'pragma'], ['', ' solidity ^0.8.20;\n\n'],
+  ['kw', 'contract'], ['nm', ' ParkingManager'], ['', ' {\n\n'],
+  ['', '    '], ['kw', 'struct'], ['nm', ' Spot'], ['', ' {\n'],
+  ['', '        '], ['ty', 'uint'], ['', '    id;\n'],
+  ['', '        '], ['ty', 'string'], ['', '  zone;          '], ['cm', '// "A-1"'], ['', '\n'],
+  ['', '        '], ['ty', 'uint'], ['', '    pricePerHour;  '], ['cm', '// wei'], ['', '\n'],
+  ['', '        '], ['ty', 'bool'], ['', '    occupied;\n'],
+  ['', '        '], ['ty', 'address'], ['', ' driver;\n'],
+  ['', '        '], ['ty', 'uint'], ['', '    bookedUntil;   '], ['cm', '// timestamp'], ['', '\n'],
+  ['', '    }\n\n'],
+  ['', '    '], ['kw', 'mapping'], ['', '('], ['ty', 'uint'], ['', ' => Spot) '], ['kw', 'public'], ['', ' spots;\n'],
+  ['', '    '], ['kw', 'mapping'], ['', '('], ['ty', 'address'], ['', ' => '], ['ty', 'bool'], ['', ') '], ['kw', 'public'], ['', ' isOperator;\n'],
+  ['', '    '], ['ty', 'uint'], ['', ' '], ['kw', 'public'], ['', ' spotCount;\n\n'],
+  ['', '    '], ['kw', 'event'], ['nm', ' SpotBooked'], ['', '('], ['ty', 'uint'], ['', ' id, '], ['ty', 'address'], ['', ' driver);\n'],
+  ['', '}'], ['', '\n']
+];
+let typeTimer = null;
+function typeCode(instant){
+  const pre = $('codeTarget'); if (!pre) return;
+  clearInterval(typeTimer);
+  const full = CODE.map(p => '<span class="' + p[0] + '">' + p[1].replace(/</g, '&lt;') + '</span>').join('');
+  if (instant || reduced){ pre.innerHTML = full; return; }
+  const flat = [];
+  CODE.forEach(p => { for (const ch of p[1]) flat.push([p[0], ch]); });
+  let i = 0;
+  pre.innerHTML = '';
+  typeTimer = setInterval(() => {
+    let step = 4;
+    let html = '';
+    while (step-- > 0 && i < flat.length){
+      html += '<span class="' + flat[i][0] + '">' + flat[i][1].replace(/</g, '&lt;') + '</span>';
+      i++;
+    }
+    const caret = document.getElementById('typeCaret');
+    if (caret) caret.remove();
+    pre.insertAdjacentHTML('beforeend', html);
+    if (i < flat.length) pre.insertAdjacentHTML('beforeend', '<span class="caret" id="typeCaret"></span>');
+    else clearInterval(typeTimer);
+  }, 16);
+}
+$('codeTarget').addEventListener('click', () => typeCode(true));
+
+/* ---------- slide 6: require simulator ---------- */
+const CASES = {
+  ok:   { fails: -1, text: 'Барлық шарт орындалды. Spot #12 брондалды: <code>occupied = true</code>, <code>driver = msg.sender</code>, <code>bookedUntil = block.timestamp + hours * 1 hours</code>. <code>SpotBooked</code> оқиғасы шығады және төлем контрактта сақталады.' },
+  busy: { fails: 1,  text: 'revert: <code>"Spot already booked"</code> — орында басқа жүргізушінің белсенді броні бар. Екінші бронь жазылмайды, күй өзгерісі сақталмайды.' },
+  pay:  { fails: 2,  text: 'revert: <code>"Wrong payment"</code> — <code>msg.value</code> сағаттық бағаның сағат санына көбейтіндісіне дәл тең болуы керек. Артық немесе кем төлем қабылданбайды.' },
+  perm: { fails: 3,  text: 'revert: <code>"Not allowed"</code> — орынды бронь иесі немесе <code>isOperator</code> рұқсаты бар бақылаушы ғана босата алады (мерзімі өткен жағдайда).' }
+};
+let simTimer = [];
+function runCase(key){
+  simTimer.forEach(clearTimeout); simTimer = [];
+  const c = CASES[key];
+  const rows = [...document.querySelectorAll('#checks .check')];
+  const v = $('verdict');
+  rows.forEach(r => { r.className = 'check'; r.querySelector('.st').textContent = r.dataset.r * 1 + 1; });
+  v.className = 'verdict'; v.innerHTML = '<b>Тексеру</b>Шарттар кезекпен орындалуда…';
+  const stop = c.fails < 0 ? rows.length : c.fails + 1;
+  for (let i = 0; i < stop; i++){
+    simTimer.push(setTimeout(() => {
+      const r = rows[i];
+      const failed = (i === c.fails);
+      r.classList.add('on', failed ? 'fail' : 'pass');
+      r.querySelector('.st').textContent = failed ? '✕' : '✓';
+      if (i === stop - 1){
+        v.className = 'verdict ' + (c.fails < 0 ? 'ok' : 'bad');
+        v.innerHTML = '<b>' + (c.fails < 0 ? 'Транзакция сәтті' : 'Транзакция кері қайтарылды') + '</b>' + c.text;
+      }
+    }, reduced ? 0 : 230 + i * 330));
+  }
+  if (c.fails >= 0){
+    for (let i = stop; i < rows.length; i++){
+      simTimer.push(setTimeout(() => { rows[i].classList.add('on'); rows[i].style.opacity = '.3'; }, reduced ? 0 : 230 + i * 330));
+    }
+  }
+}
+document.querySelectorAll('[data-case]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-case]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  runCase(b.dataset.case);
+});
+
+/* ---------- slide 7: interactive mockup ---------- */
+const ZONES = ['A', 'B', 'C'];
+const PRICES = { A: 0.003, B: 0.002, C: 0.001 };
+const BUSY0 = [1, 4, 5, 9, 12, 13, 18, 22];
+let spotsData = [], zoneFilter = 'all', selected = null, hours = 1, connected = false, txBusy = false;
+
+function buildSpots(){
+  spotsData = Array.from({ length: 24 }, (_, i) => ({
+    id: i + 1,
+    zone: ZONES[Math.floor(i / 8)],
+    label: ZONES[Math.floor(i / 8)] + '-' + ((i % 8) + 1),
+    price: PRICES[ZONES[Math.floor(i / 8)]],
+    busy: BUSY0.includes(i)
+  }));
+  const g = $('spotGrid'); g.replaceChildren();
+  spotsData.forEach(s => {
+    const b = document.createElement('button');
+    b.className = 'spot' + (s.busy ? ' busy' : '');
+    b.textContent = s.label;
+    b.dataset.id = s.id;
+    b.setAttribute('aria-label', s.label + (s.busy ? ' — бос емес' : ' — бос'));
+    b.onclick = () => selectSpot(s.id);
+    g.append(b);
+  });
+  selected = null; hours = 1;
+  document.querySelectorAll('[data-h]').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.h === '1')));
+  applyFilter();
+  renderPanel();
+  $('txLine').innerHTML = 'Орынды таңдап, бронь жасап көріңіз.';
+}
+function applyFilter(){
+  document.querySelectorAll('#spotGrid .spot').forEach(el => {
+    const s = spotsData[el.dataset.id - 1];
+    el.classList.toggle('hidden', zoneFilter !== 'all' && s.zone !== zoneFilter);
+  });
+  const pool = spotsData.filter(s => zoneFilter === 'all' || s.zone === zoneFilter);
+  $('freeCount').textContent = 'бос: ' + pool.filter(s => !s.busy).length + ' / ' + pool.length;
+}
+function selectSpot(id){
+  const s = spotsData[id - 1];
+  if (s.busy || txBusy) { if (s.busy) toast('Бұл орын бос емес — контракт екінші бронды қабылдамайды'); return; }
+  selected = id;
+  document.querySelectorAll('#spotGrid .spot').forEach(el => el.classList.toggle('sel', el.dataset.id == String(id)));
+  renderPanel();
+}
+function renderPanel(){
+  const s = selected ? spotsData[selected - 1] : null;
+  $('selTitle').textContent = s ? '#' + s.id : '—';
+  $('selZone').textContent = s ? '  ' + s.label : '';
+  $('selState').textContent = s ? 'бос' : 'таңдалмады';
+  $('selPrice').textContent = s ? s.price.toFixed(3) + ' ETH' : '—';
+  $('selTotal').textContent = s ? (s.price * hours).toFixed(3) + ' ETH' : '—';
+  $('bookBtn').disabled = !(s && connected && !txBusy);
+  $('bookBtn').textContent = !s ? 'Орынды таңдаңыз' : (!connected ? 'Әуелі кошелекті қосыңыз' : 'Бронь жасау · ' + (s.price * hours).toFixed(3) + ' ETH');
+}
+document.querySelectorAll('[data-zone]').forEach(b => b.onclick = () => {
+  zoneFilter = b.dataset.zone;
+  document.querySelectorAll('[data-zone]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  applyFilter();
+});
+document.querySelectorAll('[data-h]').forEach(b => b.onclick = () => {
+  hours = +b.dataset.h;
+  document.querySelectorAll('[data-h]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  renderPanel();
+});
+$('walletBtn').onclick = () => {
+  connected = !connected;
+  const el = $('walletBtn');
+  el.classList.toggle('off', !connected);
+  el.innerHTML = connected ? '🦊 0x7A3f…B91c' : '🦊 Connect Wallet';
+  toast(connected ? 'Макет: кошелек қосылды (0x7A3f…B91c)' : 'Макет: кошелек ажыратылды');
+  renderPanel();
+};
+function hex(n){ let s = '0x'; const h = '0123456789abcdef'; for (let i = 0; i < n; i++) s += h[Math.floor(Math.random() * 16)]; return s; }
+$('bookBtn').onclick = () => {
+  if (!selected || txBusy) return;
+  const s = spotsData[selected - 1];
+  txBusy = true; renderPanel();
+  const line = $('txLine');
+  const txHash = hex(22) + '…';
+  line.innerHTML = '<div class="st"><span class="sp"></span>MetaMask растауын күту…</div>';
+  const t1 = reduced ? 10 : 900, t2 = reduced ? 20 : 2100;
+  setTimeout(() => {
+    line.innerHTML = '<div class="st"><span class="sp"></span>Транзакция блокқа кіруде… (pending)</div><div class="hash">' + txHash + '</div>';
+  }, t1);
+  setTimeout(() => {
+    s.busy = true;
+    const el = document.querySelector('#spotGrid .spot[data-id="' + s.id + '"]');
+    el.classList.remove('sel'); el.classList.add('busy', 'just');
+    setTimeout(() => el.classList.remove('just'), 1000);
+    line.innerHTML = '<div class="st ok">✓ confirmed · block 7 412 338</div><div class="hash">' + txHash + '</div><div>SpotBooked(' + s.id + ', 0x7A3f…B91c) · ' + hours + ' сағ · ' + (s.price * hours).toFixed(3) + ' ETH</div>';
+    txBusy = false; selected = null;
+    applyFilter(); renderPanel();
+    toast('Макет: ' + s.label + ' орны брондалды. Нақты транзакция жіберілмеді.');
+  }, t2);
+};
+buildSpots();
+
+/* ---------- counters ---------- */
+function runCounters(slide){
+  slide.querySelectorAll('[data-count]').forEach(el => {
+    const to = +el.dataset.count;
+    if (reduced){ el.textContent = to; return; }
+    let cur = 0;
+    const step = () => { cur++; el.textContent = cur; if (cur < to) setTimeout(step, 260); };
+    el.textContent = '0'; setTimeout(step, 320);
+  });
+}
+
+/* ---------- navigation ---------- */
+function go(n, hash = true){
+  index = Math.max(0, Math.min(TOTAL - 1, n));
+  slides.forEach((s, i) => {
+    const on = i === index;
+    s.classList.toggle('active', on);
+    s.setAttribute('aria-hidden', String(!on));
+    s.inert = !on;
+    if (!on) s.classList.remove('anim');
+  });
+  const cur = slides[index];
+  void cur.offsetWidth;                 // restart entrance animations
+  cur.classList.add('anim');
+  cur.querySelectorAll('[data-a]').forEach((el, i) => { el.style.animationDelay = (reduced ? 0 : 90 + i * 72) + 'ms'; });
+
+  $('curNum').textContent = String(index + 1).padStart(2, '0');
+  $('progressBar').style.width = ((index + 1) / TOTAL * 100) + '%';
+  $('chapter').textContent = cur.dataset.section;
+  document.querySelectorAll('.dot').forEach((d, i) => {
+    d.classList.toggle('active', i === index);
+    d.setAttribute('aria-selected', String(i === index));
+  });
+  document.querySelectorAll('.ov-item').forEach((o, i) => o.classList.toggle('active', i === index));
+  if (hash) history.replaceState(null, '', '#' + (index + 1));
+  if (notesOpen) renderNotes();
+  $('announcer').textContent = (index + 1) + ' / ' + TOTAL + ' — ' + cur.dataset.title;
+
+  if (index === 1) runCounters(cur);
+  if (index === 4) typeCode(false); else clearInterval(typeTimer);
+  if (index === 5) runCase(document.querySelector('[data-case][aria-pressed="true"]').dataset.case);
+}
+
+/* dots + overview */
+slides.forEach((s, i) => {
+  const d = document.createElement('button');
+  d.className = 'dot'; d.setAttribute('role', 'tab');
+  d.title = s.dataset.title; d.setAttribute('aria-label', (i + 1) + '. ' + s.dataset.title);
+  d.onclick = () => go(i);
+  $('dots').append(d);
+
+  const o = document.createElement('button');
+  o.className = 'ov-item';
+  o.innerHTML = '<b>' + String(i + 1).padStart(2, '0') + '</b><span>' + s.dataset.title + '<small>' + s.dataset.section + '</small></span>';
+  o.onclick = () => { $('ovDialog').close(); go(i); };
+  $('ovGrid').append(o);
+});
+
+/* notes */
+function renderNotes(){
+  $('notesTitle').textContent = slides[index].dataset.title;
+  $('notesText').textContent = notes[index];
+  $('notesMeta').textContent = (index + 1) + ' / ' + TOTAL + ' · спикер жазбасы · 35–50 сек';
+}
+function toggleNotes(force){
+  notesOpen = force === undefined ? !notesOpen : force;
+  $('notes').hidden = !notesOpen;
+  $('notesBtn').setAttribute('aria-pressed', String(notesOpen));
+  if (notesOpen) renderNotes();
+}
+function openDialog(id){ toggleNotes(false); dialogs.forEach(d => d.open && d.close()); $(id).showModal(); }
+
+async function fullscreen(){
+  try {
+    if (document.fullscreenElement) await document.exitFullscreen();
+    else await document.documentElement.requestFullscreen();
+  } catch { toast('Толық экран үшін браузердегі F11 пернесін қолданыңыз'); }
+}
+document.addEventListener('fullscreenchange', () => {
+  $('fsBtn').setAttribute('aria-pressed', String(!!document.fullscreenElement));
+  resize();
+});
+
+$('prevBtn').onclick = () => go(index - 1);
+$('nextBtn').onclick = () => go(index + 1);
+$('notesBtn').onclick = () => toggleNotes();
+$('notesClose').onclick = () => toggleNotes(false);
+$('ovBtn').onclick = () => openDialog('ovDialog');
+$('helpBtn').onclick = () => openDialog('helpDialog');
+$('fsBtn').onclick = fullscreen;
+$('printBtn').onclick = () => { toggleNotes(false); window.print(); };
+document.querySelectorAll('[data-close]').forEach(b => b.onclick = () => b.closest('dialog').close());
+dialogs.forEach(d => d.addEventListener('click', e => {
+  if (e.target !== d) return;
+  const r = d.getBoundingClientRect();
+  if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close();
+}));
+
+/* keyboard */
+document.addEventListener('keydown', e => {
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if (k === 'escape'){ toggleNotes(false); return; }
+  if (dialogs.some(d => d.open)) return;
+  if ((k === ' ' || k === 'enter') && e.target.closest('button,a')) return;
+  if (['arrowright', 'arrowdown', 'pagedown', ' ', 'enter'].includes(k)){ e.preventDefault(); go(index + 1); return; }
+  if (['arrowleft', 'arrowup', 'pageup'].includes(k)){ e.preventDefault(); go(index - 1); return; }
+  if (k === 'home'){ e.preventDefault(); go(0); return; }
+  if (k === 'end'){ e.preventDefault(); go(TOTAL - 1); return; }
+  if (/^[1-8]$/.test(k)){ go(+k - 1); return; }
+  if (k === 'n'){ toggleNotes(); return; }
+  if (k === 'o'){ openDialog('ovDialog'); return; }
+  if (k === 'f'){ fullscreen(); return; }
+  if (k === 'p'){ e.preventDefault(); toggleNotes(false); window.print(); return; }
+  if (k === '?' || k === '/'){ openDialog('helpDialog'); return; }
+  if (k === 'r'){ buildSpots(); if (index === 6) toast('Макет қайта басталды'); return; }
+});
+
+/* touch */
+$('stage').addEventListener('touchstart', e => {
+  if (e.target.closest('button,a,[contenteditable]')) return;
+  touch = { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+}, { passive: true });
+$('stage').addEventListener('touchend', e => {
+  if (!touch) return;
+  const dx = e.changedTouches[0].clientX - touch.x, dy = e.changedTouches[0].clientY - touch.y;
+  if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.5) go(index + (dx < 0 ? 1 : -1));
+  touch = null;
+}, { passive: true });
+
+window.addEventListener('resize', resize);
+window.addEventListener('beforeprint', () => slides.forEach(s => { s.classList.add('anim'); s.inert = false; }));
+window.addEventListener('hashchange', () => {
+  const n = +location.hash.slice(1);
+  if (n >= 1 && n <= TOTAL) go(n - 1, false);
+});
+if (document.fonts) document.fonts.ready.then(resize);
+const start = +location.hash.slice(1);
+go(start >= 1 && start <= TOTAL ? start - 1 : 0, false);
+resize();
+})();
+</script>
+</body>
+</html>
