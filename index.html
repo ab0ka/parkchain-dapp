@@ -346,7 +346,7 @@ const SEPOLIA = 11155111n;
 
 /* Deploy жасалған контракттың адресі.
    Мұнда адрес тұрса, сайт кошелексіз-ақ Sepolia-дан нақты деректерді оқиды. */
-const DEFAULT_CONTRACT = "";
+const DEFAULT_CONTRACT = "0xE6AD1CfA38192692498dD360A96B23e21FDe58Bb";
 
 /* Кошелексіз оқу үшін ашық RPC (view сұраулары газ талап етпейді) */
 const RPC_URLS = [
@@ -423,7 +423,7 @@ function renderLog(){
 function txShow(html){ $('txLine').innerHTML = html; }
 function errText(e){
   const raw = e?.reason || e?.shortMessage || e?.info?.error?.message || e?.data?.message || e?.message || String(e);
-  if (/user rejected|ACTION_REJECTED/i.test(raw)) return 'Транзакцияны пайдаланушы бас тартты';
+  if (/rejected|denied|ACTION_REJECTED/i.test(raw)) return 'Транзакцияны пайдаланушы бас тартты';
   if (/insufficient funds/i.test(raw)) return 'Аккаунтта жеткілікті test ETH жоқ';
   // кейбір түйіндер revert себебін қайтармайды — түсініксіз техникалық мәтін көрсетпейміз
   if (/missing revert data|CALL_EXCEPTION|cannot estimate gas|execution reverted$/i.test(raw))
@@ -792,6 +792,7 @@ $('withdrawBtn').onclick = () => ownerAction('Қаражатты шығару', 
 /* ═══════════ mode & wallet ═══════════ */
 function setMode(m){
   mode = m;
+  localStorage_set('parkchain.mode', m);   // желі ауысқанда бет жаңарса, режим сақталады
   $('modeDemo').setAttribute('aria-pressed', String(m === 'demo'));
   $('modeChain').setAttribute('aria-pressed', String(m === 'chain'));
   $('chainSetup').hidden = m !== 'chain';
@@ -981,7 +982,11 @@ if (window.ethereum){
 }
 
 setInterval(() => { if (spots.length){ renderGrid(); renderSelection(); } }, 30000);
-setMode('demo');
+
+// Контракт адресі белгілі болса — әдепкіде нақты желіні көрсетеміз (кошелек қажет емес).
+// Пайдаланушы таңдаған режим сақталады және бет жаңарғанда қалпына келеді.
+const savedMode = localStorage_get('parkchain.mode');
+setMode(savedMode === 'demo' || savedMode === 'chain' ? savedMode : (DEFAULT_CONTRACT ? 'chain' : 'demo'));
 })();
 </script>
 </body>
